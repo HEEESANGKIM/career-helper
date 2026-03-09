@@ -12,7 +12,8 @@ Key features include an **AI-driven Interview Assistant** that analyzes audio fi
 ---
 
 ## 2. Key Features (A-Project Requirements) (Temporary)
-- **Advanced AI Analysis:** Real-time analysis of interview audio files to detect filler words and visualize vocal tone/flow.
+-**Advanced AI Analysis (OpenAI GPT-4o mini):** Utilizes GPT-4o mini for high-performance natural language processing to generate tailored cover letters and provide strategic portfolio feedback.
+- **Speech-to-Text Interview Analysis (OpenAI Whisper):** Leverages OpenAI Whisper to transcribe interview audio files accurately, detecting filler words and visualizing vocal tone/flow.
 - **Media Interaction:** Users can upload and manage resume files, portfolios, and audio recordings.
 - **Personalized Recommendations:** Realistic job matching based on user-inputted data (Education, Experience, Certifications).
 - **Secure Authentication:** Robust login system using **Google OAuth** for secure user data management.
@@ -33,7 +34,7 @@ Key features include an **AI-driven Interview Assistant** that analyzes audio fi
 - **Frontend:** Next.js (React)
 - **Backend/Database:** Supabase, Vercel
 - **Authentication:** Google OAuth
-- **AI Engine:** OpenAI API (GPT-4 mini model)
+- **AI Engine:** OpenAI API (**GPT-4o mini** for LLM, **Whisper** for STT)
 - **Project Management:** [Jira Software](https://sbucse416.atlassian.net/jira/software/projects/CH/boards/1?visitedUserSeg=true)
 - **Design:** Figma
 

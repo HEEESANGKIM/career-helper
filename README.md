@@ -33,6 +33,7 @@ Key features include an **AI-driven Interview Assistant** that analyzes audio fi
 - **Frontend:** Next.js (React)
 - **Backend/Database:** Supabase, Vercel
 - **Authentication:** Google OAuth
+- **AI Engine:** OpenAI API (GPT-4 mini model)
 - **Project Management:** [Jira Software](https://sbucse416.atlassian.net/jira/software/projects/CH/boards/1?visitedUserSeg=true)
 - **Design:** Figma
 

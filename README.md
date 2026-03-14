@@ -41,4 +41,4 @@ And a **Portfolio Optimizer** that generates tailored cover letter drafts and su
 ---
 
 ## 5. Deployment (Beta)
-*Link will be provided during the beta release phase.*
+(https://career-helper-nu.vercel.app/)

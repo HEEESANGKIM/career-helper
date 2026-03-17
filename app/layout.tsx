@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import "./globals.css";
+import AuthControls from "@/components/auth-controls";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -14,6 +16,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
+        <header className="top-nav">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
+            <Link href="/" className="text-sm font-semibold text-slate-800">
+              Career Helper
+            </Link>
+            <AuthControls variant="top" />
+          </div>
+        </header>
         {children}
       </body>
     </html>

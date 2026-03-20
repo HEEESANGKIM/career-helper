@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import "./globals.css";
 import AuthControls from "@/components/auth-controls";
+import ThemeToggle from "@/components/theme-toggle";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -18,10 +20,13 @@ export default function RootLayout({
       <body className="antialiased">
         <header className="top-nav">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
-            <Link href="/" className="text-sm font-semibold text-slate-800">
-              Career Helper
+            <Link href="/" aria-label="Career Helper Home" className="inline-flex items-center">
+              <Image src="/logo.png" alt="Career Helper" width={176} height={96} className="h-10 w-auto" priority />
             </Link>
-            <AuthControls variant="top" />
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <AuthControls variant="top" />
+            </div>
           </div>
         </header>
         {children}

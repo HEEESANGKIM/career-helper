@@ -15,6 +15,7 @@ create table if not exists public.profiles (
   role_certifications text,
   language_test_name text,
   language_test_score text,
+  desired_companies text,
   other_certifications text,
   target_industry text,
   preferred_location text,
@@ -43,6 +44,7 @@ alter table public.profiles add column if not exists tech_stack text;
 alter table public.profiles add column if not exists role_certifications text;
 alter table public.profiles add column if not exists language_test_name text;
 alter table public.profiles add column if not exists language_test_score text;
+alter table public.profiles add column if not exists desired_companies text;
 alter table public.profiles add column if not exists other_certifications text;
 alter table public.profiles add column if not exists target_industry text;
 alter table public.profiles add column if not exists preferred_location text;

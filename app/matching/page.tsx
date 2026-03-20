@@ -41,6 +41,13 @@ type RealJob = {
   fitReasons: string[];
 };
 
+type JobDetailAnalysis = {
+  fitSummary: string;
+  strengths: string[];
+  gaps: string[];
+  actionItems: string[];
+};
+
 const toTokenSet = (value: string | null) =>
   new Set(
     (value ?? "")
@@ -58,6 +65,8 @@ export default function MatchingPage() {
   const [realJobsSource, setRealJobsSource] = useState("");
   const [realJobsLoading, setRealJobsLoading] = useState(false);
   const [realJobsMessage, setRealJobsMessage] = useState("");
+  const [detailLoadingKey, setDetailLoadingKey] = useState("");
+  const [detailAnalysis, setDetailAnalysis] = useState<JobDetailAnalysis | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -176,6 +185,42 @@ export default function MatchingPage() {
       .sort((a, b) => b.score - a.score);
   }, [profile]);
 
+  const loadJobDetailAnalysis = async (job: RealJob, idx: number) => {
+    if (!profile) return;
+    setDetailLoadingKey(`${job.url}-${idx}`);
+    const profileSummary = [
+      `학력:${profile.school_name ?? ""}`,
+      `전공:${profile.major ?? ""}`,
+      `GPA:${profile.gpa_score ?? 0}/${profile.gpa_scale ?? 4.5}`,
+      `핵심스킬:${profile.core_skills ?? ""}`,
+      `기술스택:${profile.tech_stack ?? ""}`,
+      `자격증:${profile.role_certifications ?? ""} ${profile.other_certifications ?? ""}`,
+      `프로젝트:${profile.project_count ?? 0}`,
+      `인턴:${profile.internship_count ?? 0}`,
+      `희망직무:${profile.target_role ?? ""}`,
+    ].join(" | ");
+
+    const res = await fetch("/api/job-detail-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jobTitle: job.title,
+        company: job.company,
+        summary: job.summary,
+        profileSummary,
+      }),
+    });
+    const json = await res.json();
+    setDetailLoadingKey("");
+
+    if (!res.ok) {
+      setRealJobsMessage(json.error ?? "공고 상세 분석에 실패했습니다.");
+      return;
+    }
+
+    setDetailAnalysis(json);
+  };
+
   return (
     <div className="app-bg px-4 py-8">
       <div className="mx-auto w-full max-w-4xl">
@@ -261,8 +306,49 @@ export default function MatchingPage() {
                           ))}
                         </ul>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => void loadJobDetailAnalysis(job, idx)}
+                        disabled={detailLoadingKey === `${job.url}-${idx}`}
+                        className="secondary-btn mt-3 px-3 py-2 text-xs disabled:opacity-60"
+                      >
+                        {detailLoadingKey === `${job.url}-${idx}` ? "분석 중..." : "AI 상세 분석"}
+                      </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {detailAnalysis && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-slate-900">공고 상세 분석</p>
+                  <p className="mt-1 text-sm text-slate-700">{detailAnalysis.fitSummary}</p>
+                  <div className="mt-2 grid gap-3 md:grid-cols-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">강점</p>
+                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                        {detailAnalysis.strengths.map((s) => (
+                          <li key={s}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">갭</p>
+                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                        {detailAnalysis.gaps.map((g) => (
+                          <li key={g}>{g}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">실행 과제</p>
+                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                        {detailAnalysis.actionItems.map((a) => (
+                          <li key={a}>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
 

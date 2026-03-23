@@ -13,11 +13,12 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
 
   useEffect(() => {
     if (!supabase || !isSupabaseConfigured) return;
+    const client = supabase;
 
     let mounted = true;
 
     const init = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await client.auth.getSession();
       if (mounted) {
         setIsLoggedIn(Boolean(data.session));
       }
@@ -27,7 +28,7 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = client.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(Boolean(session));
     });
 

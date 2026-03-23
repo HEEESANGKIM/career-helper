@@ -70,7 +70,7 @@ const normalizeResponse = (raw: unknown): RealJobResponse => {
   const fallback: RealJobResponse = { recommendedRoles: [], items: [] };
 
   if (Array.isArray(raw)) {
-    const items = raw
+    const items: RealJob[] = raw
       .map((job) => job as Partial<RealJob>)
       .filter((job) => job.url && !isLikelyClosed(job))
       .slice(0, 5)
@@ -95,7 +95,7 @@ const normalizeResponse = (raw: unknown): RealJobResponse => {
   const recommendedRoles = Array.isArray(typed.recommendedRoles)
     ? typed.recommendedRoles.map(String).slice(0, 5)
     : [];
-  const items = Array.isArray(typed.items)
+  const items: RealJob[] = Array.isArray(typed.items)
     ? typed.items
         .map((job) => job as Partial<RealJob>)
         .filter((job) => job.url && !isLikelyClosed(job))

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { useLanguage } from "@/components/language-provider";
 
 type MyProfile = {
   full_name: string | null;
@@ -27,6 +28,7 @@ type AlertItem = {
 };
 
 export default function MyInfoPage() {
+  const { tx } = useLanguage();
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -57,7 +59,7 @@ export default function MyInfoPage() {
   useEffect(() => {
     const load = async () => {
       if (!supabase || !isSupabaseConfigured) {
-        setMessage("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.");
+        setMessage(tx("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.", "Supabase environment variables are missing. Please check .env.local."));
         setLoading(false);
         return;
       }
@@ -71,7 +73,7 @@ export default function MyInfoPage() {
       const user = userData.user;
       const metadata = user.user_metadata ?? {};
       const userEmail = user.email ?? "";
-      const fallbackNickname = userEmail.includes("@") ? userEmail.split("@")[0] : "사용자";
+      const fallbackNickname = userEmail.includes("@") ? userEmail.split("@")[0] : tx("사용자", "User");
 
       setEmail(userEmail);
       setAvatarUrl((metadata.avatar_url as string) || (metadata.picture as string) || "");
@@ -119,7 +121,7 @@ export default function MyInfoPage() {
       return;
     }
 
-    setMessage("희망기업 저장 완료. 알림 목록을 갱신합니다.");
+    setMessage(tx("희망기업 저장 완료. 알림 목록을 갱신합니다.", "Target companies saved. Refreshing alerts."));
     await loadAlerts();
   };
 
@@ -134,10 +136,10 @@ export default function MyInfoPage() {
       <div className="mx-auto w-full max-w-4xl">
         <div className="surface-card p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">My Info</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">내정보</h1>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">{tx("내정보", "My Info")}</h1>
 
           {loading ? (
-            <p className="mt-4 text-sm text-slate-600">정보를 불러오는 중입니다...</p>
+            <p className="mt-4 text-sm text-slate-600">{tx("정보를 불러오는 중입니다...", "Loading your information...")}</p>
           ) : (
             <>
               <div className="mt-4 flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -148,50 +150,50 @@ export default function MyInfoPage() {
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">{initials}</div>
                 )}
                 <div>
-                  <p className="text-xl font-semibold text-slate-900">{nickname || "사용자"}</p>
+                  <p className="text-xl font-semibold text-slate-900">{nickname || tx("사용자", "User")}</p>
                   <p className="text-sm text-slate-600">{email}</p>
                 </div>
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">기본 회원정보</p>
-                  <p className="mt-2">로그인 방식: {provider}</p>
-                  <p>가입일: {joinedAt || "-"}</p>
+                  <p className="font-semibold text-slate-900">{tx("기본 회원정보", "Account basics")}</p>
+                  <p className="mt-2">{tx("로그인 방식", "Login method")}: {provider}</p>
+                  <p>{tx("가입일", "Joined")}: {joinedAt || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">학력/희망정보</p>
-                  <p className="mt-2">학교: {profile?.school_name || "-"}</p>
-                  <p>학력: {profile?.education_level || "-"}</p>
-                  <p>전공: {profile?.major || "-"}</p>
-                  <p>희망직무: {profile?.target_role || "-"}</p>
-                  <p>희망지역: {profile?.preferred_location || "-"}</p>
+                  <p className="font-semibold text-slate-900">{tx("학력/희망정보", "Education & preferences")}</p>
+                  <p className="mt-2">{tx("학교", "School")}: {profile?.school_name || "-"}</p>
+                  <p>{tx("학력", "Education level")}: {profile?.education_level || "-"}</p>
+                  <p>{tx("전공", "Major")}: {profile?.major || "-"}</p>
+                  <p>{tx("희망직무", "Target role")}: {profile?.target_role || "-"}</p>
+                  <p>{tx("희망지역", "Preferred location")}: {profile?.preferred_location || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">링크</p>
-                  <p className="mt-2 break-all">포트폴리오: {profile?.portfolio_url || "-"}</p>
+                  <p className="font-semibold text-slate-900">{tx("링크", "Links")}</p>
+                  <p className="mt-2 break-all">{tx("포트폴리오", "Portfolio")}: {profile?.portfolio_url || "-"}</p>
                   <p className="break-all">GitHub: {profile?.github_url || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">어학 정보</p>
-                  <p className="mt-2">시험: {profile?.language_test_name || "-"}</p>
-                  <p>점수/등급: {profile?.language_test_score || "-"}</p>
+                  <p className="font-semibold text-slate-900">{tx("어학 정보", "Language test info")}</p>
+                  <p className="mt-2">{tx("시험", "Test")}: {profile?.language_test_name || "-"}</p>
+                  <p>{tx("점수/등급", "Score/Grade")}: {profile?.language_test_score || "-"}</p>
                 </div>
               </div>
 
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">희망 기업 알림</p>
-                <p className="mt-1 text-xs text-slate-500">쉼표로 구분해서 입력하세요. 예: 삼성전자, Google, 네이버</p>
+                <p className="text-sm font-semibold text-slate-900">{tx("희망 기업 알림", "Target company alerts")}</p>
+                <p className="mt-1 text-xs text-slate-500">{tx("쉼표로 구분해서 입력하세요. 예: 삼성전자, Google, 네이버", "Separate with commas. Ex: Samsung Electronics, Google, Naver")}</p>
                 <textarea value={desiredCompanies} onChange={(e) => setDesiredCompanies(e.target.value)} className="field mt-2 min-h-20" />
                 <button onClick={saveDesiredCompanies} disabled={savingCompanies} className="primary-btn mt-2 px-4 py-2 text-sm disabled:opacity-60">
-                  {savingCompanies ? "저장 중..." : "희망기업 저장"}
+                  {savingCompanies ? tx("저장 중...", "Saving...") : tx("희망기업 저장", "Save target companies")}
                 </button>
               </div>
 
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">최근 공고 알림</p>
+                <p className="text-sm font-semibold text-slate-900">{tx("최근 공고 알림", "Recent job alerts")}</p>
                 {alerts.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-600">등록된 알림이 없습니다. 희망 기업을 먼저 저장하세요.</p>
+                  <p className="mt-2 text-sm text-slate-600">{tx("등록된 알림이 없습니다. 희망 기업을 먼저 저장하세요.", "No alerts yet. Save target companies first.")}</p>
                 ) : (
                   <div className="mt-2 space-y-2">
                     {alerts.map((alert) => (
@@ -204,7 +206,7 @@ export default function MyInfoPage() {
                       >
                         <p className="font-semibold text-slate-900">{alert.company}</p>
                         <p className="text-slate-700">{alert.title}</p>
-                        <p className="text-xs text-slate-500">게시일: {alert.postedAt}</p>
+                        <p className="text-xs text-slate-500">{tx("게시일", "Posted")}: {alert.postedAt}</p>
                       </a>
                     ))}
                   </div>
@@ -213,10 +215,10 @@ export default function MyInfoPage() {
 
               <div className="mt-4 flex gap-2">
                 <Link href="/profile" className="primary-btn px-4 py-2 text-sm">
-                  프로필 수정
+                  {tx("프로필 수정", "Edit profile")}
                 </Link>
                 <Link href="/dashboard" className="secondary-btn px-4 py-2 text-sm">
-                  대시보드
+                  {tx("대시보드", "Dashboard")}
                 </Link>
               </div>
             </>

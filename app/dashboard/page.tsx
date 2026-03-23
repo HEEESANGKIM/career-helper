@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { useLanguage } from "@/components/language-provider";
 
 type InsightResponse = {
   name: string;
@@ -50,6 +51,7 @@ function QuickActionIcon({ name }: { name: QuickActionIconName }) {
 }
 
 export default function DashboardPage() {
+  const { tx } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [insight, setInsight] = useState<InsightResponse | null>(null);
@@ -58,7 +60,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       if (!supabase || !isSupabaseConfigured) {
-        setMessage("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.");
+        setMessage(tx("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.", "Supabase environment variables are missing. Please check .env.local."));
         setLoading(false);
         return;
       }
@@ -79,7 +81,7 @@ export default function DashboardPage() {
       setLoading(false);
 
       if (!res.ok) {
-        setMessage(json.error ?? "대시보드 인사이트를 불러오지 못했습니다.");
+        setMessage(json.error ?? tx("대시보드 인사이트를 불러오지 못했습니다.", "Failed to load dashboard insights."));
         return;
       }
 
@@ -131,10 +133,10 @@ export default function DashboardPage() {
       <div className="mx-auto w-full max-w-5xl">
         <div className="surface-card p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Dashboard</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">커리어 대시보드</h1>
-          <p className="mt-2 text-sm text-slate-600">프로필 기반 AI 인사이트와 취업 준비 진행률을 확인하세요.</p>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">{tx("커리어 대시보드", "Career dashboard")}</h1>
+          <p className="mt-2 text-sm text-slate-600">{tx("프로필 기반 AI 인사이트와 취업 준비 진행률을 확인하세요.", "Track profile-based AI insights and job preparation progress.")}</p>
 
-          {loading && <p className="mt-4 text-sm text-slate-600">인사이트를 계산하는 중입니다...</p>}
+          {loading && <p className="mt-4 text-sm text-slate-600">{tx("인사이트를 계산하는 중입니다...", "Calculating insights...")}</p>}
           {message && !loading && <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</p>}
 
           {!loading && !message && insight && (
@@ -143,7 +145,7 @@ export default function DashboardPage() {
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">AI Rank Insight</p>
                   <h2 className="mt-2 text-lg font-semibold text-slate-900">
-                    현재 {insight.name}님은 취준 상위 <span className="text-blue-700">{animatedPercent}%</span>
+                    {tx("현재", "Currently")} {insight.name}{tx("님은 취준 상위", "is in the top")} <span className="text-blue-700">{animatedPercent}%</span>
                   </h2>
                   <div className="mt-3 h-3 rounded-full bg-blue-100">
                     <div className="h-3 rounded-full bg-blue-600 transition-all duration-200" style={{ width: `${100 - animatedPercent}%` }} />
@@ -155,24 +157,24 @@ export default function DashboardPage() {
                   </ul>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">프로필 완성도</p>
+                  <p className="text-sm font-semibold text-slate-900">{tx("프로필 완성도", "Profile completeness")}</p>
                   <p className="mt-2 text-2xl font-bold text-slate-900">{insight.completeness}%</p>
                   <div className="mt-3 h-2 rounded-full bg-slate-100">
                     <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${insight.completeness}%` }} />
                   </div>
                   <Link href="/profile" className="secondary-btn mt-4 inline-block px-3 py-2 text-xs">
-                    프로필 보완하기
+                    {tx("프로필 보완하기", "Improve profile")}
                   </Link>
                 </div>
               </div>
 
               <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">최근 5주 준비 추이</p>
+                <p className="text-sm font-semibold text-slate-900">{tx("최근 5주 준비 추이", "Recent 5-week progress trend")}</p>
                 <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
                   {(() => {
                     const chart = buildTrendChart(insight.trend);
                     return (
-                      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} className="h-40 w-full" role="img" aria-label="최근 5주 준비 추이 그래프">
+                      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} className="h-40 w-full" role="img" aria-label={tx("최근 5주 준비 추이 그래프", "Recent 5-week progress chart")}>
                         <defs>
                           <linearGradient id="trendArea" x1="0" x2="0" y1="0" y2="1">
                             <stop offset="0%" stopColor="#f87171" stopOpacity="0.26" />
@@ -198,7 +200,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">주간 실행 리포트</p>
+                <p className="text-sm font-semibold text-slate-900">{tx("주간 실행 리포트", "Weekly execution report")}</p>
                 <ul className="mt-2 list-disc pl-5 text-sm text-slate-700">
                   {insight.weeklyReport.map((line) => (
                     <li key={line}>{line}</li>
@@ -210,25 +212,25 @@ export default function DashboardPage() {
                 <Link href="/profile" className="surface-card p-4 hover:border-blue-300">
                   <div className="flex items-center gap-2">
                     <QuickActionIcon name="profile" />
-                    <p className="text-sm font-semibold text-slate-900">프로필 설정</p>
+                    <p className="text-sm font-semibold text-slate-900">{tx("프로필 설정", "Profile setup")}</p>
                   </div>
                 </Link>
                 <Link href="/matching" className="surface-card p-4 hover:border-blue-300">
                   <div className="flex items-center gap-2">
                     <QuickActionIcon name="matching" />
-                    <p className="text-sm font-semibold text-slate-900">채용 매칭</p>
+                    <p className="text-sm font-semibold text-slate-900">{tx("채용 매칭", "Job matching")}</p>
                   </div>
                 </Link>
                 <Link href="/cover-letter" className="surface-card p-4 hover:border-blue-300">
                   <div className="flex items-center gap-2">
                     <QuickActionIcon name="coverLetter" />
-                    <p className="text-sm font-semibold text-slate-900">AI 커버레터</p>
+                    <p className="text-sm font-semibold text-slate-900">{tx("AI 커버레터", "AI cover letter")}</p>
                   </div>
                 </Link>
                 <Link href="/simulator" className="surface-card p-4 hover:border-blue-300">
                   <div className="flex items-center gap-2">
                     <QuickActionIcon name="simulator" />
-                    <p className="text-sm font-semibold text-slate-900">시뮬레이터</p>
+                    <p className="text-sm font-semibold text-slate-900">{tx("시뮬레이터", "Simulator")}</p>
                   </div>
                 </Link>
               </div>

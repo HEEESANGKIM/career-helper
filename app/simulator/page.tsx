@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { useLanguage } from "@/components/language-provider";
 
 type Candidate = {
   id: string;
@@ -82,6 +83,7 @@ const formatDeadline = (deadline: string) =>
   );
 
 export default function SimulatorPage() {
+  const { tx } = useLanguage();
   const [userName, setUserName] = useState("지원자");
   const [stage, setStage] = useState<"jobs" | "docs" | "essay" | "interview" | "result">("jobs");
   const [activePosting, setActivePosting] = useState<VirtualPosting | null>(null);
@@ -106,14 +108,14 @@ export default function SimulatorPage() {
     if (!user) return userName;
     const profileName = user.user_metadata?.full_name as string | undefined;
     const emailName = user.email?.split("@")[0];
-    const nextName = profileName || emailName || "지원자";
+    const nextName = profileName || emailName || tx("지원자", "Applicant");
     setUserName(nextName);
     return nextName;
   };
 
   const applyToPosting = async (posting: VirtualPosting) => {
     if (isPostingClosed(posting.deadline)) {
-      setMessage("마감된 공고입니다. 다른 공고를 선택해 주세요.");
+      setMessage(tx("마감된 공고입니다. 다른 공고를 선택해 주세요.", "This posting is closed. Please choose another one."));
       return;
     }
 
@@ -126,7 +128,7 @@ export default function SimulatorPage() {
     const candidates: Candidate[] = [
       {
         id: "user-0",
-        name: currentUserName || userName || "지원자",
+        name: currentUserName || userName || tx("지원자", "Applicant"),
         kind: "user",
         resumeScore: randomInt(65, 88),
         essayScore: 0,
@@ -138,7 +140,7 @@ export default function SimulatorPage() {
     for (let i = 0; i < humanApplicants; i++) {
       candidates.push({
         id: `human-${i + 1}`,
-        name: `지원자_${i + 1}`,
+        name: `${tx("지원자", "Applicant")}_${i + 1}`,
         kind: "human",
         resumeScore: randomInt(55, 90),
         essayScore: randomInt(48, 90),
@@ -168,7 +170,12 @@ export default function SimulatorPage() {
     setEssayAnswer("");
     setEssaySubmitted(false);
     setStage("docs");
-    setMessage(`${posting.title} 참여 신청 완료. 이제 전형이 시작됩니다. (서류 합격: ${docPass.length}/${MAX_CAPACITY})`);
+    setMessage(
+      tx(
+        `${posting.title} 참여 신청 완료. 이제 전형이 시작됩니다. (서류 합격: ${docPass.length}/${MAX_CAPACITY})`,
+        `Application submitted for ${posting.title}. The process starts now. (Document pass: ${docPass.length}/${MAX_CAPACITY})`,
+      ),
+    );
   };
 
   const startInterview = async () => {
@@ -193,7 +200,7 @@ export default function SimulatorPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setMessage(json.error ?? "면접 질문 생성에 실패했습니다.");
+      setMessage(json.error ?? tx("면접 질문 생성에 실패했습니다.", "Failed to generate interview question."));
       return;
     }
 
@@ -207,7 +214,7 @@ export default function SimulatorPage() {
     if (!activePosting) return;
     const trimmed = essayAnswer.trim();
     if (trimmed.length < 120) {
-      setMessage("자소서는 120자 이상 작성해 주세요.");
+      setMessage(tx("자소서는 120자 이상 작성해 주세요.", "Please write at least 120 characters for the essay."));
       return;
     }
 
@@ -218,7 +225,7 @@ export default function SimulatorPage() {
     });
     setDocPassCandidates(updated);
     setEssaySubmitted(true);
-    setMessage(`자소서 제출 완료 (평가 점수: ${estimatedScore}점). 면접을 시작합니다.`);
+    setMessage(tx(`자소서 제출 완료 (평가 점수: ${estimatedScore}점). 면접을 시작합니다.`, `Essay submitted (score: ${estimatedScore}). Starting interview.`));
 
     await startInterview();
   };
@@ -228,9 +235,9 @@ export default function SimulatorPage() {
 
     if (!question || !answer.trim()) {
       if (autoSubmit) {
-        setMessage("시간이 종료되어 빈 답변으로 자동 제출되었습니다.");
+        setMessage(tx("시간이 종료되어 빈 답변으로 자동 제출되었습니다.", "Time is up. Auto-submitted with an empty answer."));
       } else {
-        setMessage("면접 답변을 입력해 주세요.");
+        setMessage(tx("면접 답변을 입력해 주세요.", "Please enter an interview answer."));
         return;
       }
     }
@@ -255,7 +262,7 @@ export default function SimulatorPage() {
     setLoading(false);
 
     if (!res.ok) {
-      setMessage(json.error ?? "면접 평가에 실패했습니다.");
+      setMessage(json.error ?? tx("면접 평가에 실패했습니다.", "Interview evaluation failed."));
       return;
     }
 
@@ -306,21 +313,21 @@ export default function SimulatorPage() {
       <div className="mx-auto w-full max-w-5xl">
         <div className="surface-card p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">AI Process Simulator</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">가상 채용 도전</h1>
-          <p className="mt-2 text-sm text-slate-600">공고와 마감일은 플랫폼이 설정합니다. 사용자는 원하는 공고를 선택해 지원만 진행합니다.</p>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">{tx("가상 채용 도전", "Virtual hiring challenge")}</h1>
+          <p className="mt-2 text-sm text-slate-600">{tx("공고와 마감일은 플랫폼이 설정합니다. 사용자는 원하는 공고를 선택해 지원만 진행합니다.", "Postings and deadlines are configured by the platform. You choose and apply to the posting you want.")}</p>
 
           <div className="mt-4 flex gap-2">
             <Link href="/" className="secondary-btn px-3 py-2 text-sm">
-              홈
+              {tx("홈", "Home")}
             </Link>
             <Link href="/dashboard" className="secondary-btn px-3 py-2 text-sm">
-              대시보드
+              {tx("대시보드", "Dashboard")}
             </Link>
           </div>
 
           {stage === "jobs" && (
             <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">가상 공고 목록</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{tx("가상 공고 목록", "Virtual posting list")}</h2>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 {VIRTUAL_POSTINGS.map((posting) => {
                   const closed = isPostingClosed(posting.deadline);
@@ -339,12 +346,12 @@ export default function SimulatorPage() {
                             closed ? "bg-slate-100 text-slate-600" : "bg-emerald-100 text-emerald-700"
                           }`}
                         >
-                          {closed ? "마감" : "모집중"}
+                          {closed ? tx("마감", "Closed") : tx("모집중", "Open")}
                         </span>
                       </div>
                       <p className="mt-2 text-sm text-slate-700">{posting.description}</p>
                       <p className="mt-2 text-xs text-slate-500">
-                        마감일: {formatDeadline(posting.deadline)} | 전체: {MAX_CAPACITY}명 (현재 신청자 {posting.humanApplicants}명, AI 보정 {aiFill}명)
+                        {tx("마감일", "Deadline")}: {formatDeadline(posting.deadline)} | {tx("전체", "Total")}: {MAX_CAPACITY}{tx("명", "")} ({tx("현재 신청자", "Current applicants")} {posting.humanApplicants}{tx("명", "")}, AI {tx("보정", "adjusted")} {aiFill}{tx("명", "")})
                       </p>
                       <button
                         type="button"
@@ -352,7 +359,7 @@ export default function SimulatorPage() {
                         disabled={closed}
                         className="primary-btn mt-3 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {closed ? "마감됨" : "참여 신청"}
+                        {closed ? tx("마감됨", "Closed") : tx("참여 신청", "Apply")}
                       </button>
                     </div>
                   );
@@ -363,7 +370,7 @@ export default function SimulatorPage() {
 
           {stage === "docs" && activePosting && (
             <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">1단계. 서류 전형</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{tx("1단계. 서류 전형", "Step 1. Document screening")}</h2>
               <p className="mt-1 text-sm text-slate-600">
                 공고: {activePosting.title} | 마감일: {formatDeadline(activePosting.deadline)} | 모집 풀: {MAX_CAPACITY}명
               </p>
@@ -376,12 +383,12 @@ export default function SimulatorPage() {
                       <p className="font-semibold text-slate-900">
                         {candidate.name} {candidate.kind === "user" ? "(나)" : candidate.kind === "ai" ? "(AI)" : ""}
                       </p>
-                      <p className="text-slate-600">서류 점수: {candidate.resumeScore}</p>
+                      <p className="text-slate-600">{tx("서류 점수", "Document score")}: {candidate.resumeScore}</p>
                     </div>
                   ))}
               </div>
               <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-                면접 진출자: {docPassCandidates.map((c) => c.name).join(", ")}
+                {tx("면접 진출자", "Interview finalists")}: {docPassCandidates.map((c) => c.name).join(", ")}
               </div>
               <button
                 onClick={() => {
@@ -390,31 +397,31 @@ export default function SimulatorPage() {
                 }}
                 className="primary-btn mt-3 px-4 py-2 text-sm"
               >
-                2단계 자소서 작성
+                {tx("2단계 자소서 작성", "Step 2 Essay writing")}
               </button>
             </div>
           )}
 
           {stage === "essay" && activePosting && (
             <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">2단계. 자소서 제출</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{tx("2단계. 자소서 제출", "Step 2. Essay submission")}</h2>
               <p className="mt-1 text-sm text-slate-600">
-                문항: {activePosting.company} {activePosting.role} 직무에 지원한 이유와 본인의 강점을 작성해 주세요. (최소 120자)
+                {tx("문항", "Prompt")}: {tx(`${activePosting.company} ${activePosting.role} 직무에 지원한 이유와 본인의 강점을 작성해 주세요. (최소 120자)`, `Explain why you applied for the ${activePosting.role} role at ${activePosting.company} and your strengths. (Minimum 120 characters)`)}
               </p>
               <textarea
                 value={essayAnswer}
                 onChange={(e) => setEssayAnswer(e.target.value)}
                 className="field mt-3 min-h-36"
-                placeholder="지원 동기, 직무 역량, 프로젝트 경험을 중심으로 작성해 주세요."
+                placeholder={tx("지원 동기, 직무 역량, 프로젝트 경험을 중심으로 작성해 주세요.", "Focus on motivation, role competency, and project experience.")}
                 disabled={loading || essaySubmitted}
               />
-              <p className="mt-1 text-xs text-slate-500">현재 글자 수: {essayAnswer.trim().length}자</p>
+              <p className="mt-1 text-xs text-slate-500">{tx("현재 글자 수", "Current character count")}: {essayAnswer.trim().length}{tx("자", "")}</p>
               <div className="mt-3 flex gap-2">
                 <button type="button" onClick={submitEssayAndMoveToInterview} disabled={loading || essaySubmitted} className="primary-btn px-4 py-2 text-sm disabled:opacity-60">
-                  {loading ? "다음 단계 준비 중..." : "자소서 제출 후 면접 시작"}
+                  {loading ? tx("다음 단계 준비 중...", "Preparing next step...") : tx("자소서 제출 후 면접 시작", "Submit essay and start interview")}
                 </button>
                 <button type="button" onClick={() => setStage("docs")} className="secondary-btn px-4 py-2 text-sm">
-                  이전 단계
+                  {tx("이전 단계", "Previous step")}
                 </button>
               </div>
             </div>
@@ -422,12 +429,12 @@ export default function SimulatorPage() {
 
           {stage === "interview" && activePosting && (
             <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">3단계. 면접</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{tx("3단계. 면접", "Step 3. Interview")}</h2>
               <p className="mt-1 text-sm text-slate-600">
-                직무: {activePosting.role} | 남은 시간: {timeLeft}초 (0초 시 자동 제출)
+                {tx("직무", "Role")}: {activePosting.role} | {tx("남은 시간", "Time left")}: {timeLeft}{tx("초", " sec")} ({tx("0초 시 자동 제출", "Auto-submit at 0 sec")})
               </p>
               <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">AI 면접 질문</p>
+                <p className="text-sm font-semibold text-slate-900">{tx("AI 면접 질문", "AI interview question")}</p>
                 <p className="mt-1 text-sm text-slate-700">{question}</p>
                 {rubric.length > 0 && (
                   <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
@@ -441,7 +448,7 @@ export default function SimulatorPage() {
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 className="field mt-3 min-h-32"
-                placeholder="면접 답변을 입력해 주세요."
+                placeholder={tx("면접 답변을 입력해 주세요.", "Enter your interview answer.")}
                 disabled={loading || submitted}
               />
               <button
@@ -449,14 +456,14 @@ export default function SimulatorPage() {
                 disabled={loading || submitted}
                 className="primary-btn mt-3 px-4 py-2 text-sm disabled:opacity-60"
               >
-                {loading ? "평가 중..." : "답변 제출"}
+                {loading ? tx("평가 중...", "Evaluating...") : tx("답변 제출", "Submit answer")}
               </button>
             </div>
           )}
 
           {stage === "result" && (
             <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">4단계. 최종 결과</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{tx("4단계. 최종 결과", "Step 4. Final result")}</h2>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 {docPassCandidates
                   .slice()
@@ -467,26 +474,26 @@ export default function SimulatorPage() {
                         {idx + 1}. {candidate.name} {candidate.kind === "user" ? "(나)" : candidate.kind === "ai" ? "(AI)" : ""}
                       </p>
                       <p className="text-slate-600">
-                        서류 {candidate.resumeScore} / 자소서 {candidate.essayScore} / 면접 {candidate.interviewScore} / 종합 {candidate.totalScore}
+                        {tx("서류", "Doc")} {candidate.resumeScore} / {tx("자소서", "Essay")} {candidate.essayScore} / {tx("면접", "Interview")} {candidate.interviewScore} / {tx("종합", "Total")} {candidate.totalScore}
                       </p>
                     </div>
                   ))}
               </div>
 
               <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                최종 합격(1~2명): {finalHires.map((c) => c.name).join(", ")}
+                {tx("최종 합격(1~2명)", "Final hires (1-2)")}: {finalHires.map((c) => c.name).join(", ")}
               </div>
 
               {interviewEval && (
                 <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
-                  <p className="font-semibold text-slate-900">내 면접 점수: {interviewEval.score}점</p>
+                  <p className="font-semibold text-slate-900">{tx("내 면접 점수", "My interview score")}: {interviewEval.score}{tx("점", "")}</p>
                   <p className="mt-1 text-slate-700">{interviewEval.summary}</p>
                   <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
                     {interviewEval.strengths.map((s) => (
-                      <li key={`s-${s}`}>강점: {s}</li>
+                      <li key={`s-${s}`}>{tx("강점", "Strength")}: {s}</li>
                     ))}
                     {interviewEval.improvements.map((i) => (
-                      <li key={`i-${i}`}>보완점: {i}</li>
+                      <li key={`i-${i}`}>{tx("보완점", "Improvement")}: {i}</li>
                     ))}
                   </ul>
                 </div>
@@ -500,7 +507,7 @@ export default function SimulatorPage() {
                 className="secondary-btn mt-3 px-4 py-2 text-sm"
                 type="button"
               >
-                공고 목록으로 돌아가기
+                {tx("공고 목록으로 돌아가기", "Back to posting list")}
               </button>
             </div>
           )}

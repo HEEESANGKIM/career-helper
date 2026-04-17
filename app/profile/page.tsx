@@ -267,7 +267,7 @@ export default function ProfilePage() {
                 <label className="mb-1 block text-sm font-medium text-slate-900">졸업(예정)일</label>
                 <input type="date" value={form.graduation_date} onChange={(e) => updateField("graduation_date", e.target.value)} className="field" />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-900">GPA 점수</label>
                   <input type="number" min="0" step="0.01" value={form.gpa_score} onChange={(e) => updateField("gpa_score", e.target.value)} className="field" />
@@ -388,11 +388,11 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div className="mt-2 flex gap-2 md:col-span-2">
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row md:col-span-2">
                 <button disabled={loading} className="primary-btn px-4 py-2 text-sm disabled:opacity-60">
                   {loading ? "저장 중..." : "상세 프로필 저장"}
                 </button>
-                <Link href="/matching" className="secondary-btn px-4 py-2 text-sm">
+                <Link href="/matching" className="secondary-btn px-4 py-2 text-center text-sm">
                   매칭 보러가기
                 </Link>
               </div>

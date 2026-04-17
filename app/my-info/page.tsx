@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { useLanguage } from "@/components/language-provider";
 
 type MyProfile = {
   full_name: string | null;
@@ -27,12 +28,15 @@ type AlertItem = {
 };
 
 export default function MyInfoPage() {
+  const { language } = useLanguage();
+  const isEn = language === "en";
+
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [nickname, setNickname] = useState("");
   const [provider, setProvider] = useState("");
-  const [joinedAt, setJoinedAt] = useState("");
+  const [joinedAtRaw, setJoinedAtRaw] = useState("");
   const [desiredCompanies, setDesiredCompanies] = useState("");
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [message, setMessage] = useState("");
@@ -57,7 +61,7 @@ export default function MyInfoPage() {
   useEffect(() => {
     const load = async () => {
       if (!supabase || !isSupabaseConfigured) {
-        setMessage("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.");
+        setMessage(isEn ? "Supabase environment variables are not configured. Check .env.local." : "Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.");
         setLoading(false);
         return;
       }
@@ -71,13 +75,13 @@ export default function MyInfoPage() {
       const user = userData.user;
       const metadata = user.user_metadata ?? {};
       const userEmail = user.email ?? "";
-      const fallbackNickname = userEmail.includes("@") ? userEmail.split("@")[0] : "사용자";
+      const fallbackNickname = userEmail.includes("@") ? userEmail.split("@")[0] : isEn ? "User" : "사용자";
 
       setEmail(userEmail);
       setAvatarUrl((metadata.avatar_url as string) || (metadata.picture as string) || "");
       setNickname((metadata.preferred_username as string) || (metadata.full_name as string) || (metadata.name as string) || fallbackNickname);
       setProvider((user.app_metadata?.provider as string) || "email");
-      setJoinedAt(user.created_at ? new Date(user.created_at).toLocaleDateString() : "");
+      setJoinedAtRaw(user.created_at ?? "");
 
       const { data, error } = await supabase
         .from("profiles")
@@ -100,7 +104,7 @@ export default function MyInfoPage() {
     };
 
     void load();
-  }, []);
+  }, [isEn]);
 
   const saveDesiredCompanies = async () => {
     if (!supabase || !isSupabaseConfigured) return;
@@ -119,7 +123,7 @@ export default function MyInfoPage() {
       return;
     }
 
-    setMessage("희망기업 저장 완료. 알림 목록을 갱신합니다.");
+    setMessage(isEn ? "Saved desired companies. Refreshing alerts." : "희망기업 저장 완료. 알림 목록을 갱신합니다.");
     await loadAlerts();
   };
 
@@ -129,15 +133,20 @@ export default function MyInfoPage() {
     return source.slice(0, 1).toUpperCase();
   }, [nickname]);
 
+  const joinedAt = useMemo(() => {
+    if (!joinedAtRaw) return "-";
+    return new Date(joinedAtRaw).toLocaleDateString(isEn ? "en-US" : "ko-KR");
+  }, [joinedAtRaw, isEn]);
+
   return (
     <div className="app-bg px-4 py-8">
       <div className="mx-auto w-full max-w-4xl">
         <div className="surface-card p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">My Info</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">내정보</h1>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">{isEn ? "My Information" : "내정보"}</h1>
 
           {loading ? (
-            <p className="mt-4 text-sm text-slate-600">정보를 불러오는 중입니다...</p>
+            <p className="mt-4 text-sm text-slate-600">{isEn ? "Loading your information..." : "정보를 불러오는 중입니다..."}</p>
           ) : (
             <>
               <div className="mt-4 flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -148,50 +157,52 @@ export default function MyInfoPage() {
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">{initials}</div>
                 )}
                 <div>
-                  <p className="text-xl font-semibold text-slate-900">{nickname || "사용자"}</p>
+                  <p className="text-xl font-semibold text-slate-900">{nickname || (isEn ? "User" : "사용자")}</p>
                   <p className="text-sm text-slate-600">{email}</p>
                 </div>
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">기본 회원정보</p>
-                  <p className="mt-2">로그인 방식: {provider}</p>
-                  <p>가입일: {joinedAt || "-"}</p>
+                  <p className="font-semibold text-slate-900">{isEn ? "Basic Account Info" : "기본 회원정보"}</p>
+                  <p className="mt-2">{isEn ? "Login method" : "로그인 방식"}: {provider}</p>
+                  <p>{isEn ? "Joined at" : "가입일"}: {joinedAt}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">학력/희망정보</p>
-                  <p className="mt-2">학교: {profile?.school_name || "-"}</p>
-                  <p>학력: {profile?.education_level || "-"}</p>
-                  <p>전공: {profile?.major || "-"}</p>
-                  <p>희망직무: {profile?.target_role || "-"}</p>
-                  <p>희망지역: {profile?.preferred_location || "-"}</p>
+                  <p className="font-semibold text-slate-900">{isEn ? "Education / Preference" : "학력/희망정보"}</p>
+                  <p className="mt-2">{isEn ? "School" : "학교"}: {profile?.school_name || "-"}</p>
+                  <p>{isEn ? "Education level" : "학력"}: {profile?.education_level || "-"}</p>
+                  <p>{isEn ? "Major" : "전공"}: {profile?.major || "-"}</p>
+                  <p>{isEn ? "Target role" : "희망직무"}: {profile?.target_role || "-"}</p>
+                  <p>{isEn ? "Preferred location" : "희망지역"}: {profile?.preferred_location || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">링크</p>
-                  <p className="mt-2 break-all">포트폴리오: {profile?.portfolio_url || "-"}</p>
+                  <p className="font-semibold text-slate-900">{isEn ? "Links" : "링크"}</p>
+                  <p className="mt-2 break-all">{isEn ? "Portfolio" : "포트폴리오"}: {profile?.portfolio_url || "-"}</p>
                   <p className="break-all">GitHub: {profile?.github_url || "-"}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-slate-900">어학 정보</p>
-                  <p className="mt-2">시험: {profile?.language_test_name || "-"}</p>
-                  <p>점수/등급: {profile?.language_test_score || "-"}</p>
+                  <p className="font-semibold text-slate-900">{isEn ? "Language Test" : "어학 정보"}</p>
+                  <p className="mt-2">{isEn ? "Test" : "시험"}: {profile?.language_test_name || "-"}</p>
+                  <p>{isEn ? "Score / Grade" : "점수/등급"}: {profile?.language_test_score || "-"}</p>
                 </div>
               </div>
 
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">희망 기업 알림</p>
-                <p className="mt-1 text-xs text-slate-500">쉼표로 구분해서 입력하세요. 예: 삼성전자, Google, 네이버</p>
+                <p className="text-sm font-semibold text-slate-900">{isEn ? "Desired Company Alerts" : "희망 기업 알림"}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {isEn ? "Use commas to separate names. Example: Samsung Electronics, Google, NAVER" : "쉼표로 구분해서 입력하세요. 예: 삼성전자, Google, 네이버"}
+                </p>
                 <textarea value={desiredCompanies} onChange={(e) => setDesiredCompanies(e.target.value)} className="field mt-2 min-h-20" />
                 <button onClick={saveDesiredCompanies} disabled={savingCompanies} className="primary-btn mt-2 px-4 py-2 text-sm disabled:opacity-60">
-                  {savingCompanies ? "저장 중..." : "희망기업 저장"}
+                  {savingCompanies ? (isEn ? "Saving..." : "저장 중...") : isEn ? "Save Desired Companies" : "희망기업 저장"}
                 </button>
               </div>
 
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">최근 공고 알림</p>
+                <p className="text-sm font-semibold text-slate-900">{isEn ? "Recent Job Alerts" : "최근 공고 알림"}</p>
                 {alerts.length === 0 ? (
-                  <p className="mt-2 text-sm text-slate-600">등록된 알림이 없습니다. 희망 기업을 먼저 저장하세요.</p>
+                  <p className="mt-2 text-sm text-slate-600">{isEn ? "No alerts yet. Save desired companies first." : "등록된 알림이 없습니다. 희망 기업을 먼저 저장하세요."}</p>
                 ) : (
                   <div className="mt-2 space-y-2">
                     {alerts.map((alert) => (
@@ -204,19 +215,19 @@ export default function MyInfoPage() {
                       >
                         <p className="font-semibold text-slate-900">{alert.company}</p>
                         <p className="text-slate-700">{alert.title}</p>
-                        <p className="text-xs text-slate-500">게시일: {alert.postedAt}</p>
+                        <p className="text-xs text-slate-500">{isEn ? "Posted at" : "게시일"}: {alert.postedAt}</p>
                       </a>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div className="mt-4 flex gap-2">
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link href="/profile" className="primary-btn px-4 py-2 text-sm">
-                  프로필 수정
+                  {isEn ? "Edit Profile" : "프로필 수정"}
                 </Link>
                 <Link href="/dashboard" className="secondary-btn px-4 py-2 text-sm">
-                  대시보드
+                  {isEn ? "Dashboard" : "대시보드"}
                 </Link>
               </div>
             </>

@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { demoJobs } from "@/lib/jobs";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { useLanguage } from "@/components/language-provider";
 
 type ProfileData = {
   school_name: string | null;
@@ -19,12 +19,26 @@ type ProfileData = {
   target_role: string | null;
 };
 
-type ScoredJob = {
-  id: string;
-  title: string;
-  company: string;
-  score: number;
-  reasons: string[];
+type CompetitionLevel = "low" | "moderate" | "high" | "unknown";
+
+type EvidenceSource = {
+  label: string;
+  url: string;
+  sourceType: "official_api" | "job_posting" | "search_result";
+  verifiedAt: string;
+};
+
+type MarketInsights = {
+  source: "saramin_api" | "verified_web_search" | "cache";
+  searchedAt: string;
+  postingPoolSize: number | null;
+  postingsChecked: number;
+  averageApplicantsPerPosting: number | null;
+  averageViewsPerPosting: number | null;
+  competitionLevel: CompetitionLevel;
+  summary: string;
+  caveat: string;
+  evidence: EvidenceSource[];
 };
 
 type RealJob = {
@@ -36,9 +50,16 @@ type RealJob = {
   publishedAt: string;
   deadline: string;
   hiringStatus: "open" | "unknown";
+  source: "saramin_api" | "verified_web_search";
+  sourceLabel: string;
   fitScore: number;
-  hireProbability: number;
+  priorityScore: number;
+  applicantCount: number | null;
+  viewCount: number | null;
+  competitionLevel: CompetitionLevel;
+  competitionText: string;
   fitReasons: string[];
+  evidence: EvidenceSource[];
 };
 
 type JobDetailAnalysis = {
@@ -48,30 +69,46 @@ type JobDetailAnalysis = {
   actionItems: string[];
 };
 
-const toTokenSet = (value: string | null) =>
-  new Set(
-    (value ?? "")
-      .split(",")
-      .map((v) => v.trim().toLowerCase())
-      .filter(Boolean),
-  );
-
 export default function MatchingPage() {
+  const { language } = useLanguage();
+  const isEn = language === "en";
+  const t = useCallback((ko: string, en: string) => (isEn ? en : ko), [isEn]);
+
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [realJobs, setRealJobs] = useState<RealJob[]>([]);
   const [recommendedRoles, setRecommendedRoles] = useState<string[]>([]);
   const [realJobsSource, setRealJobsSource] = useState("");
+  const [marketInsights, setMarketInsights] = useState<MarketInsights | null>(null);
   const [realJobsLoading, setRealJobsLoading] = useState(false);
   const [realJobsMessage, setRealJobsMessage] = useState("");
   const [detailLoadingKey, setDetailLoadingKey] = useState("");
   const [detailAnalysis, setDetailAnalysis] = useState<JobDetailAnalysis | null>(null);
 
+  const formatNumber = (value: number | null | undefined) => {
+    if (typeof value !== "number") return t("미공개", "Not public");
+    return value.toLocaleString(isEn ? "en-US" : "ko-KR");
+  };
+
+  const competitionLabel = (level: CompetitionLevel) => {
+    if (level === "high") return t("높음", "High");
+    if (level === "moderate") return t("보통", "Moderate");
+    if (level === "low") return t("낮음", "Low");
+    return t("미공개", "Unknown");
+  };
+
+  const sourceLabel = (source: string) => {
+    if (source === "saramin_api") return t("사람인 공식 API", "Saramin official API");
+    if (source === "verified_web_search") return t("검증된 웹 검색", "Verified web search");
+    if (source === "cache") return t("저장된 검증 결과", "Cached verified result");
+    return t("검색 중", "Searching");
+  };
+
   useEffect(() => {
     const load = async () => {
       if (!supabase || !isSupabaseConfigured) {
-        setMessage("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.");
+        setMessage(t("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.", "Supabase environment variables are not configured. Check .env.local."));
         setLoading(false);
         return;
       }
@@ -93,7 +130,7 @@ export default function MatchingPage() {
       if (error) {
         setMessage(error.message);
       } else if (!data) {
-        setMessage("프로필이 없습니다. 먼저 프로필을 작성해 주세요.");
+        setMessage(t("프로필이 없습니다. 먼저 프로필을 작성해 주세요.", "No profile found. Please create your profile first."));
       } else {
         setProfile(data);
       }
@@ -114,90 +151,33 @@ export default function MatchingPage() {
       setRealJobsLoading(false);
 
       if (!res.ok) {
-        setRealJobsMessage(json.error ?? "실공고 검색에 실패했습니다.");
+        setRealJobsMessage(json.error ?? t("실공고 검색에 실패했습니다.", "Failed to fetch live job postings."));
         return;
       }
 
       setRealJobs(json.items ?? []);
       setRecommendedRoles(json.recommendedRoles ?? []);
       setRealJobsSource(json.source ?? "");
+      setMarketInsights(json.marketInsights ?? null);
       setRealJobsMessage("");
     };
 
     void load();
-  }, []);
-
-  const scoredJobs = useMemo<ScoredJob[]>(() => {
-    if (!profile) return [];
-
-    const skillSet = toTokenSet([profile.core_skills, profile.tech_stack].filter(Boolean).join(", "));
-    const certSet = toTokenSet([profile.role_certifications, profile.other_certifications].filter(Boolean).join(", "));
-    const gpaScore = profile.gpa_score ?? 0;
-    const gpaScale = profile.gpa_scale ?? 4.5;
-    const normalizedGpa = gpaScale > 0 ? (gpaScore / gpaScale) * 4.5 : 0;
-    const internshipCount = profile.internship_count ?? 0;
-    const projectCount = profile.project_count ?? 0;
-    const targetRole = (profile.target_role ?? "").toLowerCase();
-
-    return demoJobs
-      .map((job) => {
-        const reasons: string[] = [];
-        let score = 0;
-
-        if (normalizedGpa >= job.minGpa) {
-          score += 30;
-          reasons.push(`GPA 기준 충족 (${gpaScore.toFixed(2)} / ${gpaScale.toFixed(1)} 환산 ${normalizedGpa.toFixed(2)})`);
-        } else {
-          const partial = Math.max(0, Math.round((normalizedGpa / job.minGpa) * 20));
-          score += partial;
-          reasons.push(`GPA 부분 점수 (${gpaScore.toFixed(2)} / ${gpaScale.toFixed(1)} 환산 ${normalizedGpa.toFixed(2)})`);
-        }
-
-        const skillMatches = job.requiredSkills.filter((skill) => skillSet.has(skill)).length;
-        const skillScore = Math.round((skillMatches / job.requiredSkills.length) * 40);
-        score += skillScore;
-        reasons.push(`핵심 스킬 일치 ${skillMatches}/${job.requiredSkills.length}`);
-
-        const certMatches = job.preferredCerts.filter((cert) => certSet.has(cert.toLowerCase())).length;
-        if (job.preferredCerts.length > 0) {
-          const certScore = Math.round((certMatches / job.preferredCerts.length) * 12);
-          score += certScore;
-          reasons.push(`자격증 일치 ${certMatches}/${job.preferredCerts.length}`);
-        }
-
-        if (job.internshipPreferred && internshipCount > 0) {
-          score += 8;
-          reasons.push("인턴 경험 반영");
-        }
-
-        if (projectCount > 0) {
-          score += Math.min(8, projectCount * 2);
-          reasons.push(`프로젝트 경험 ${projectCount}건 반영`);
-        }
-
-        if (targetRole && job.title.toLowerCase().includes(targetRole)) {
-          score += 5;
-          reasons.push("희망 직무 키워드 일치");
-        }
-
-        return { id: job.id, title: job.title, company: job.company, score: Math.min(100, score), reasons };
-      })
-      .sort((a, b) => b.score - a.score);
-  }, [profile]);
+  }, [t]);
 
   const loadJobDetailAnalysis = async (job: RealJob, idx: number) => {
     if (!profile) return;
     setDetailLoadingKey(`${job.url}-${idx}`);
     const profileSummary = [
-      `학력:${profile.school_name ?? ""}`,
-      `전공:${profile.major ?? ""}`,
+      `${t("학력", "Education")}:${profile.school_name ?? ""}`,
+      `${t("전공", "Major")}:${profile.major ?? ""}`,
       `GPA:${profile.gpa_score ?? 0}/${profile.gpa_scale ?? 4.5}`,
-      `핵심스킬:${profile.core_skills ?? ""}`,
-      `기술스택:${profile.tech_stack ?? ""}`,
-      `자격증:${profile.role_certifications ?? ""} ${profile.other_certifications ?? ""}`,
-      `프로젝트:${profile.project_count ?? 0}`,
-      `인턴:${profile.internship_count ?? 0}`,
-      `희망직무:${profile.target_role ?? ""}`,
+      `${t("핵심스킬", "Core skills")}:${profile.core_skills ?? ""}`,
+      `${t("기술스택", "Tech stack")}:${profile.tech_stack ?? ""}`,
+      `${t("자격증", "Certifications")}:${profile.role_certifications ?? ""} ${profile.other_certifications ?? ""}`,
+      `${t("프로젝트", "Projects")}:${profile.project_count ?? 0}`,
+      `${t("인턴", "Internships")}:${profile.internship_count ?? 0}`,
+      `${t("희망직무", "Target role")}:${profile.target_role ?? ""}`,
     ].join(" | ");
 
     const res = await fetch("/api/job-detail-analysis", {
@@ -206,7 +186,7 @@ export default function MatchingPage() {
       body: JSON.stringify({
         jobTitle: job.title,
         company: job.company,
-        summary: job.summary,
+        summary: `${job.summary} | ${t("공개 경쟁 지표", "Public competition signal")}: ${job.competitionText}`,
         profileSummary,
       }),
     });
@@ -214,7 +194,7 @@ export default function MatchingPage() {
     setDetailLoadingKey("");
 
     if (!res.ok) {
-      setRealJobsMessage(json.error ?? "공고 상세 분석에 실패했습니다.");
+      setRealJobsMessage(json.error ?? t("공고 상세 분석에 실패했습니다.", "Failed to analyze job details."));
       return;
     }
 
@@ -226,20 +206,20 @@ export default function MatchingPage() {
       <div className="mx-auto w-full max-w-4xl">
         <div className="surface-card p-6">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Matching</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">상세 프로필 기반 채용 매칭</h1>
-          <p className="mt-2 text-sm text-slate-600">현재 모집중 실공고 + AI 추천 직종 + 적합도/취업확률을 제공합니다.</p>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">{t("상세 프로필 기반 채용 매칭", "Profile-Based Job Matching")}</h1>
+          <p className="mt-2 text-sm text-slate-600">{t("현재 모집중 실공고를 검증하고 공개 지원자수 기반 경쟁 강도와 지원 우선순위를 함께 봅니다.", "Review verified live postings with public applicant signals and application priority.")}</p>
 
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Link href="/profile" className="secondary-btn px-3 py-2 text-sm">
-              프로필 수정
+              {t("프로필 수정", "Edit profile")}
             </Link>
             <Link href="/dashboard" className="secondary-btn px-3 py-2 text-sm">
-              대시보드
+              {t("대시보드", "Dashboard")}
             </Link>
           </div>
 
           {loading && (
-            <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">매칭 데이터를 계산하는 중입니다...</p>
+            <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{t("매칭 데이터를 계산하는 중입니다...", "Calculating matching data...")}</p>
           )}
 
           {!loading && message && (
@@ -249,11 +229,10 @@ export default function MatchingPage() {
           {!loading && !message && profile && (
             <>
               <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                프로필 요약: {profile.school_name || "학교 미입력"} / {profile.major || "전공 미입력"} / GPA{" "}
-                {profile.gpa_score ?? 0} / {profile.gpa_scale ?? 4.5}
+                {t("프로필 요약", "Profile summary")}: {profile.school_name || t("학교 미입력", "School missing")} / {profile.major || t("전공 미입력", "Major missing")} / GPA {profile.gpa_score ?? 0} / {profile.gpa_scale ?? 4.5}
               </div>
 
-              <h2 className="mt-6 text-lg font-semibold text-slate-900">AI 추천 직종</h2>
+              <h2 className="mt-6 text-lg font-semibold text-slate-900">{t("AI 추천 직종 (자소서/이력 기반)", "AI-Recommended Roles")}</h2>
               {recommendedRoles.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {recommendedRoles.map((role) => (
@@ -263,17 +242,41 @@ export default function MatchingPage() {
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-slate-600">추천 직종을 계산하는 중이거나 결과가 없습니다.</p>
+                <p className="mt-2 text-sm text-slate-600">{t("자소서/이력 기반 추천 직종을 계산 중이거나 결과가 없습니다.", "No recommended roles yet.")}</p>
               )}
 
-              <h2 className="mt-6 text-lg font-semibold text-slate-900">현재 모집중 AI 실공고 추천</h2>
+              <h2 className="mt-6 text-lg font-semibold text-slate-900">{t("현재 모집중 실공고 추천", "Live Job Recommendations")}</h2>
               <p className="mt-1 text-xs text-slate-500">
-                {realJobsSource === "cache" ? "캐시된 결과" : realJobsSource === "ai_search" ? "최초 AI 검색 결과" : "로딩 중"}
+                {sourceLabel(realJobsSource)}
               </p>
 
-              {realJobsLoading && <p className="mt-2 text-sm text-slate-600">실제 공고를 찾는 중입니다...</p>}
+              {realJobsLoading && <p className="mt-2 text-sm text-slate-600">{t("실제 공고를 찾는 중입니다...", "Searching live postings...")}</p>}
               {!realJobsLoading && realJobsMessage && (
                 <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{realJobsMessage}</p>
+              )}
+              {!realJobsLoading && !realJobsMessage && marketInsights && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+                    <div className="rounded-md bg-slate-50 p-3 text-slate-800">
+                      <p className="text-xs font-semibold text-slate-500">{t("평균 지원자수/공고", "Avg. applicants/posting")}</p>
+                      <p className="mt-1 text-lg font-bold text-slate-900">{formatNumber(marketInsights.averageApplicantsPerPosting)}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-3 text-slate-800">
+                      <p className="text-xs font-semibold text-slate-500">{t("평균 조회수/공고", "Avg. views/posting")}</p>
+                      <p className="mt-1 text-lg font-bold text-slate-900">{formatNumber(marketInsights.averageViewsPerPosting)}</p>
+                    </div>
+                    <div className="rounded-md bg-slate-50 p-3 text-slate-800">
+                      <p className="text-xs font-semibold text-slate-500">{t("경쟁 강도", "Competition level")}</p>
+                      <p className="mt-1 text-lg font-bold text-slate-900">{competitionLabel(marketInsights.competitionLevel)}</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-600">{marketInsights.summary}</p>
+                  <p className="mt-1 text-xs text-slate-500">{marketInsights.caveat}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {t("검증 공고", "Checked postings")}: {marketInsights.postingsChecked}
+                    {marketInsights.postingPoolSize ? ` / ${t("검색 풀", "Search pool")}: ${formatNumber(marketInsights.postingPoolSize)}` : ""}
+                  </p>
+                </div>
               )}
               {!realJobsLoading && !realJobsMessage && realJobs.length > 0 && (
                 <div className="mt-3 space-y-3">
@@ -285,20 +288,44 @@ export default function MatchingPage() {
                           <p className="text-sm text-slate-600">
                             {job.company} · {job.location}
                           </p>
-                          <p className="mt-1 text-xs text-emerald-700">모집상태: {job.hiringStatus === "open" ? "모집중" : "확인필요"}</p>
+                          <p className="mt-1 text-xs text-emerald-700">
+                            {t("모집상태", "Hiring status")}: {job.hiringStatus === "open" ? t("모집중", "Open") : t("확인필요", "Unknown")}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {t("출처", "Source")}: {job.sourceLabel}
+                          </p>
                         </div>
                         <a href={job.url} target="_blank" rel="noreferrer" className="secondary-btn px-2 py-1 text-xs">
-                          공고 보기
+                          {t("공고 보기", "View posting")}
                         </a>
                       </div>
                       <p className="mt-2 text-sm text-slate-700">{job.summary}</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-md bg-blue-50 p-2 text-blue-800">적합도: {job.fitScore}%</div>
-                        <div className="rounded-md bg-emerald-50 p-2 text-emerald-800">취업 확률: {job.hireProbability}%</div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                        <div className="rounded-md bg-blue-50 p-2 text-blue-800">
+                          {t("적합도", "Fit score")}: {job.fitScore}%
+                        </div>
+                        <div className="rounded-md bg-emerald-50 p-2 text-emerald-800">
+                          {t("지원 우선순위", "Application priority")}: {job.priorityScore}%
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-2 text-slate-800">
+                          {t("경쟁 강도", "Competition level")}: {competitionLabel(job.competitionLevel)}
+                        </div>
+                        <div className="rounded-md bg-slate-50 p-2 text-slate-800">
+                          {job.competitionText}
+                        </div>
                       </div>
                       <p className="mt-1 text-xs text-slate-500">
-                        게시일: {job.publishedAt || "unknown"} / 마감: {job.deadline || "unknown"}
+                        {t("게시일", "Posted")}: {job.publishedAt || "unknown"} / {t("마감", "Deadline")}: {job.deadline || "unknown"}
                       </p>
+                      {job.evidence?.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                          {job.evidence.slice(0, 2).map((source) => (
+                            <a key={`${job.url}-${source.url}-${source.label}`} href={source.url} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 hover:text-blue-800">
+                              {source.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       {job.fitReasons?.length > 0 && (
                         <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
                           {job.fitReasons.map((reason) => (
@@ -312,7 +339,7 @@ export default function MatchingPage() {
                         disabled={detailLoadingKey === `${job.url}-${idx}`}
                         className="secondary-btn mt-3 px-3 py-2 text-xs disabled:opacity-60"
                       >
-                        {detailLoadingKey === `${job.url}-${idx}` ? "분석 중..." : "AI 상세 분석"}
+                        {detailLoadingKey === `${job.url}-${idx}` ? t("분석 중...", "Analyzing...") : t("AI 상세 분석", "AI Detail Analysis")}
                       </button>
                     </div>
                   ))}
@@ -321,11 +348,11 @@ export default function MatchingPage() {
 
               {detailAnalysis && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">공고 상세 분석</p>
+                  <p className="text-sm font-semibold text-slate-900">{t("공고 상세 분석", "Detailed Analysis")}</p>
                   <p className="mt-1 text-sm text-slate-700">{detailAnalysis.fitSummary}</p>
                   <div className="mt-2 grid gap-3 md:grid-cols-3">
                     <div>
-                      <p className="text-xs font-semibold text-slate-900">강점</p>
+                      <p className="text-xs font-semibold text-slate-900">{t("강점", "Strengths")}</p>
                       <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
                         {detailAnalysis.strengths.map((s) => (
                           <li key={s}>{s}</li>
@@ -333,7 +360,7 @@ export default function MatchingPage() {
                       </ul>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-slate-900">갭</p>
+                      <p className="text-xs font-semibold text-slate-900">{t("갭", "Gaps")}</p>
                       <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
                         {detailAnalysis.gaps.map((g) => (
                           <li key={g}>{g}</li>
@@ -341,7 +368,7 @@ export default function MatchingPage() {
                       </ul>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-slate-900">실행 과제</p>
+                      <p className="text-xs font-semibold text-slate-900">{t("실행 과제", "Action Items")}</p>
                       <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
                         {detailAnalysis.actionItems.map((a) => (
                           <li key={a}>{a}</li>
@@ -351,26 +378,6 @@ export default function MatchingPage() {
                   </div>
                 </div>
               )}
-
-              <h2 className="mt-7 text-lg font-semibold text-slate-900">규칙 기반 스코어 매칭</h2>
-              <div className="mt-3 space-y-3">
-                {scoredJobs.map((job) => (
-                  <div key={job.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-base font-semibold text-slate-900">{job.title}</h2>
-                        <p className="text-sm text-slate-600">{job.company}</p>
-                      </div>
-                      <div className="rounded-lg bg-blue-600 px-3 py-1 text-sm font-semibold text-white">{job.score}점</div>
-                    </div>
-                    <ul className="mt-3 list-disc pl-5 text-sm text-slate-700">
-                      {job.reasons.map((reason) => (
-                        <li key={`${job.id}-${reason}`}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
             </>
           )}
         </div>

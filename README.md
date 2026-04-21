@@ -56,7 +56,7 @@ This project is built with **Next.js 16**, **React 19**, and **Tailwind CSS 4**.
 
 1. Clone the repository:
 
-Bash
+```bash
 git clone [https://github.com/HEEESANGKIM/career-helper.git]
 cd career-helper
 

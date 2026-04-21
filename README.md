@@ -53,10 +53,9 @@ This project is built with **Next.js 16**, **React 19**, and **Tailwind CSS 4**.
 - **npm**: Included with your Node.js installation.
 
 ### Installation & Setup
-
+```bash
 1. Clone the repository:
 
-```bash
 git clone [https://github.com/HEEESANGKIM/career-helper.git]
 cd career-helper
 
@@ -64,12 +63,10 @@ cd career-helper
 This project requires several packages including **Supabase, OpenAI, and Lucide React**. You can install all necessary dependencies listed in the package.json by running.
 but now you can just install npm to check the Web Design
 
-Bash
 npm install
 
 3. Run the development server:
 
-Bash
 npm run dev
 
 4. Access the application:

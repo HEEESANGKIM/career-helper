@@ -42,3 +42,35 @@ And a **Portfolio Optimizer** that generates tailored cover letter drafts and su
 
 ## 5. Deployment (Beta)
 
+---
+
+## 6. How to Run and View the Project
+
+This project is built with **Next.js 16**, **React 19**, and **Tailwind CSS 4**. To view the front-end web pages and the UI mockups implemented in code, follow the steps below.
+
+### Prerequisites
+- **Node.js**: v18.x or later.
+- **npm**: Included with your Node.js installation.
+
+### Installation & Setup
+
+1. Clone the repository:
+
+Bash
+git clone [https://github.com/HEEESANGKIM/career-helper.git]
+cd career-helper
+
+2. Install dependencies:
+This project requires several packages including **Supabase, OpenAI, and Lucide React**. You can install all necessary dependencies listed in the package.json by running.
+but now you can just install npm to check the Web Design
+
+Bash
+npm install
+
+3. Run the development server:
+
+Bash
+npm run dev
+
+4. Access the application:
+Open your browser and navigate to http://localhost:3000.

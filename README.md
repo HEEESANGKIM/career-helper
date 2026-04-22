@@ -42,6 +42,8 @@ And a **Portfolio Optimizer** that generates tailored cover letter drafts and su
 
 ## 5. Deployment (Beta)
 
+https://career-helper-dun.vercel.app/
+
 ---
 
 ## 6. How to Run and View the Project

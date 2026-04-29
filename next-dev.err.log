@@ -1,1 +1,2 @@
-⚠ Fast Refresh had to perform a full reload when ./components/language-provider.tsx changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+⚠ Port 3000 is in use by process 18572, using available port 3001 instead.
+⨯ Unable to acquire lock at C:\Users\DL\Desktop\CSE\416\career-helper\.next\dev\lock, is another instance of next dev running?

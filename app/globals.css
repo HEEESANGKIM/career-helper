@@ -116,9 +116,51 @@ body {
   font-family: var(--font-geist-sans);
   font-size: 15px;
   line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: normal;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.ko-friendly,
+.content-card,
+.surface-card,
+.bento-card,
+.page-kicker,
+.primary-btn,
+.secondary-btn,
+.chip,
+.accent-pill {
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+.ko-friendly {
+  line-height: 1.65;
+}
+
+.responsive-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1.25rem;
+}
+
+.readable-card {
+  min-width: 0;
+  padding: 1.5rem;
+}
+
+.readable-grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+  .readable-grid-2 {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
 }
 
 body::selection {
@@ -130,6 +172,13 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+input,
+textarea,
+select,
+button {
+  color: inherit;
 }
 
 button,
@@ -156,6 +205,64 @@ a {
 .app-bg > * {
   position: relative;
   z-index: 1;
+}
+
+.landing-hero {
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 34%),
+    linear-gradient(245deg, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 92%, transparent), color-mix(in srgb, var(--surface) 86%, transparent));
+}
+
+.landing-aurora {
+  position: absolute;
+  inset: -30% -10% auto;
+  height: 74%;
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 28%, transparent), transparent),
+    linear-gradient(135deg, transparent 12%, color-mix(in srgb, var(--accent-2) 20%, transparent), transparent 58%);
+  filter: blur(44px);
+  opacity: 0.88;
+  transform: skewY(-8deg);
+  animation: aurora-drift 12s ease-in-out infinite alternate;
+}
+
+.premium-preview::after,
+.feature-glow-card::after,
+.highlight-card::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  content: "";
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-2) 20%, transparent), transparent 32%, color-mix(in srgb, var(--accent) 16%, transparent));
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.premium-preview,
+.feature-glow-card,
+.highlight-card {
+  position: relative;
+}
+
+.premium-preview:hover::after,
+.feature-glow-card:hover::after,
+.highlight-card:hover::after {
+  opacity: 1;
+}
+
+.feature-glow-card,
+.highlight-card {
+  overflow: hidden;
+}
+
+.feature-glow-card:hover,
+.highlight-card:hover {
+  border-color: color-mix(in srgb, var(--accent-2) 46%, var(--line));
+  box-shadow:
+    var(--shadow-soft),
+    0 0 0 1px color-mix(in srgb, var(--accent-2) 18%, transparent);
 }
 
 .cockpit-shell {
@@ -378,6 +485,7 @@ a {
   border-radius: 22px;
   background: linear-gradient(145deg, var(--surface-strong), var(--surface));
   box-shadow: var(--card-shadow);
+  min-width: 0;
 }
 
 .clickable-card {
@@ -665,6 +773,7 @@ a {
     linear-gradient(145deg, var(--field-highlight), transparent),
     var(--field-bg);
   color: var(--foreground);
+  -webkit-text-fill-color: var(--foreground);
   padding: 13px 15px;
   font-size: 14px;
   line-height: 1.5;
@@ -690,6 +799,7 @@ textarea.field {
     linear-gradient(145deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent-2) 5%, transparent)),
     var(--field-bg-focus);
   color: var(--foreground);
+  -webkit-text-fill-color: var(--foreground);
   caret-color: var(--accent-2);
 }
 
@@ -758,9 +868,19 @@ textarea.field {
   }
 }
 
+@keyframes aurora-drift {
+  from {
+    transform: translate3d(-2%, -1%, 0) skewY(-8deg);
+  }
+  to {
+    transform: translate3d(5%, 4%, 0) skewY(-11deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reveal-up,
   .stagger-item,
+  .landing-aurora,
   .primary-btn,
   .secondary-btn {
     animation: none;

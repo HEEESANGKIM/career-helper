@@ -48,7 +48,7 @@ export default function RootLayout({
                   alt="PathMate"
                   width={1536}
                   height={1024}
-                  className="-my-3 h-16 w-auto max-w-none object-contain sm:-my-4 sm:h-20"
+                  className="-my-5 h-20 w-auto max-w-none object-contain sm:-my-6 sm:h-24"
                   priority
                   unoptimized
                 />

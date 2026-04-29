@@ -3,71 +3,10 @@
 > next dev
 
 ▲ Next.js 16.1.6 (Turbopack)
-- Local:         http://localhost:3000
-- Network:       http://172.16.14.28:3000
+- Local:         http://localhost:3001
+- Network:       http://172.16.14.28:3001
 - Environments: .env.local, .env
 
 ✓ Starting...
-Creating turbopack project {
-  dir: 'C:\\Users\\DL\\Desktop\\CSE\\416\\career-helper',
-  testMode: true
-}
-✓ Ready in 1604ms
- GET / 200 in 1977ms (compile: 1142ms, render: 834ms)
- GET /interview/hiring-manager 200 in 200ms (compile: 129ms, render: 72ms)
- GET /career-chess 200 in 156ms (compile: 102ms, render: 54ms)
-✓ Compiled in 222ms
- GET /career-chess 200 in 303ms (compile: 58ms, render: 245ms)
- GET /career-chess 200 in 224ms (compile: 6ms, render: 217ms)
- GET /career-chess 200 in 213ms (compile: 5ms, render: 207ms)
- GET /career-chess 200 in 210ms (compile: 12ms, render: 198ms)
- GET /career-chess 200 in 183ms (compile: 5ms, render: 178ms)
- GET /career-chess 200 in 173ms (compile: 6ms, render: 167ms)
- GET /career-chess 200 in 184ms (compile: 6ms, render: 177ms)
- GET /career-chess 200 in 180ms (compile: 5ms, render: 174ms)
- GET /career-chess 200 in 164ms (compile: 4ms, render: 160ms)
- GET /career-chess 200 in 164ms (compile: 5ms, render: 159ms)
- GET /career-chess 200 in 163ms (compile: 4ms, render: 159ms)
- GET /career-chess 200 in 143ms (compile: 6ms, render: 138ms)
- GET /career-chess 200 in 139ms (compile: 4ms, render: 135ms)
- GET /career-chess 200 in 143ms (compile: 4ms, render: 139ms)
- GET /career-chess 200 in 145ms (compile: 5ms, render: 140ms)
- GET /career-chess 200 in 180ms (compile: 4ms, render: 176ms)
- GET /career-chess 200 in 201ms (compile: 3ms, render: 198ms)
- GET /career-chess 200 in 204ms (compile: 5ms, render: 199ms)
- GET /career-chess 200 in 200ms (compile: 4ms, render: 196ms)
- GET /career-chess 200 in 200ms (compile: 6ms, render: 195ms)
- GET /career-chess 200 in 166ms (compile: 11ms, render: 155ms)
- GET /career-chess 200 in 179ms (compile: 8ms, render: 171ms)
- GET /career-chess 200 in 154ms (compile: 3ms, render: 150ms)
- GET /career-chess 200 in 155ms (compile: 4ms, render: 151ms)
- GET /career-chess 200 in 149ms (compile: 5ms, render: 144ms)
- GET /career-chess 200 in 148ms (compile: 6ms, render: 142ms)
- GET /career-chess 200 in 170ms (compile: 12ms, render: 158ms)
- GET /career-chess 200 in 166ms (compile: 5ms, render: 161ms)
- GET /career-chess 200 in 175ms (compile: 3ms, render: 172ms)
- GET /career-chess 200 in 166ms (compile: 9ms, render: 156ms)
- GET /career-chess 200 in 138ms (compile: 4ms, render: 135ms)
- GET /career-chess 200 in 164ms (compile: 5ms, render: 159ms)
- GET /career-chess 200 in 184ms (compile: 5ms, render: 180ms)
- GET /career-chess 200 in 178ms (compile: 3ms, render: 175ms)
- GET /career-chess 200 in 183ms (compile: 4ms, render: 179ms)
- GET /career-chess 200 in 186ms (compile: 5ms, render: 182ms)
- GET /career-chess 200 in 164ms (compile: 9ms, render: 155ms)
- GET /career-chess 200 in 118ms (compile: 7ms, render: 112ms)
- GET /career-chess 200 in 123ms (compile: 3ms, render: 120ms)
- GET /career-chess 200 in 126ms (compile: 4ms, render: 122ms)
- GET /career-chess 200 in 143ms (compile: 5ms, render: 138ms)
- GET /career-chess 200 in 119ms (compile: 5ms, render: 114ms)
- GET /career-chess 200 in 139ms (compile: 7ms, render: 132ms)
- GET /career-chess 200 in 113ms (compile: 5ms, render: 108ms)
- GET /career-chess 200 in 88ms (compile: 4ms, render: 84ms)
- GET /career-chess 200 in 63ms (compile: 6ms, render: 57ms)
- GET /career-chess 200 in 38ms (compile: 4ms, render: 34ms)
-✓ Compiled in 274ms
-✓ Compiled in 161ms
-✓ Compiled in 109ms
-✓ Compiled in 167ms
- GET /career-chess 200 in 445ms (compile: 120ms, render: 325ms)
- GET /career-chess 200 in 143ms (compile: 6ms, render: 136ms)
+  Suggestion: If you intended to restart next dev, terminate the other process, and then try again.
 [?25h

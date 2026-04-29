@@ -11,6 +11,7 @@ import {
   saveFeatureRecord,
   validationError,
 } from "@/lib/evaluation-server";
+import { careerDataCopy, findCareerTemplate, localizeTemplate } from "@/lib/career-data";
 
 export const runtime = "nodejs";
 
@@ -27,9 +28,9 @@ const fallbackResult = (language: "ko" | "en", answer: string) => {
         companyFit: clampScore(score - 5),
       },
       strengths: ["Clear baseline structure", "Role intent is visible"],
-      weaknesses: ["Needs sharper evidence and numbers", "Company-style fit could be more explicit"],
-      recommendations: ["Use STAR order", "Add one measurable outcome", "Name the tradeoff you considered"],
-      nextPracticeQuestion: "Tell me about a time you changed your technical approach after receiving new constraints.",
+      weaknesses: ["Needs sharper evidence and numbers", "Role-specific fit could be more explicit"],
+      recommendations: ["Use STAR order", "Add one measurable outcome", "Name the tradeoff or judgment you considered"],
+      nextPracticeQuestion: "Tell me about a time you adjusted your approach after receiving new constraints.",
     };
   }
 
@@ -43,9 +44,9 @@ const fallbackResult = (language: "ko" | "en", answer: string) => {
       companyFit: clampScore(score - 5),
     },
     strengths: ["기본 답변 구조가 명확합니다", "직무 의도가 드러납니다"],
-    weaknesses: ["근거와 수치가 더 필요합니다", "회사 스타일 적합도를 더 구체화할 수 있습니다"],
-    recommendations: ["STAR 순서로 정리하세요", "정량 성과를 하나 추가하세요", "고려한 트레이드오프를 명시하세요"],
-    nextPracticeQuestion: "새로운 제약 조건을 받고 기술 접근 방식을 바꾼 경험을 말해 주세요.",
+    weaknesses: ["근거와 수치가 더 필요합니다", "직무별 평가 기준에 맞춘 설명을 더 구체화할 수 있습니다"],
+    recommendations: ["STAR 순서로 정리하세요", "정량 성과를 하나 추가하세요", "고려한 판단 기준이나 선택지를 명시하세요"],
+    nextPracticeQuestion: "새로운 제약 조건을 받고 접근 방식을 조정했던 경험을 말해 주세요.",
   };
 };
 
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
   const language = parseLanguage(body?.language);
   const selectedPersona = cleanText(body?.selectedPersona, 120);
   const companyStyle = cleanText(body?.companyStyle, 240);
+  const evaluationFocus = cleanText(body?.evaluationFocus, 1600);
   const role = cleanText(body?.role, 120);
   const question = cleanText(body?.question, 700);
   const userAnswer = cleanText(body?.userAnswer, 7000);
@@ -63,12 +65,15 @@ export async function POST(request: NextRequest) {
   }
 
   const fallback = fallbackResult(language, userAnswer);
+  const roleTemplate = localizeTemplate(findCareerTemplate(role), language);
   const prompt = [
-    "You are PathMate.ai, a career interview evaluator.",
-    "Evaluate a candidate answer against a simulated company-style hiring manager persona.",
+    "You are PathMate.ai, a career interview evaluator for students, new graduates, and early-career job seekers.",
+    "Evaluate a candidate answer against a simulated role/company-style hiring persona.",
     "Do not claim the persona is a real hiring manager or represents the real company.",
     `Return JSON only in ${languageName(language)}.`,
     "Use conservative, evidence-based scoring. passProbability is an estimated practice signal, not a real hiring probability.",
+    "Adapt the evaluation criteria to the selected role and seniority.",
+    "Examples: HR roles emphasize communication, organization, and professionalism; sales roles emphasize persuasion, confidence, and objection handling; designer roles emphasize portfolio thinking, user empathy, and process explanation; developer roles emphasize technical reasoning, debugging, and architecture; analyst roles emphasize metrics, assumptions, and clear business reasoning.",
     "Schema:",
     `{
   "overallScore": number,
@@ -88,6 +93,15 @@ export async function POST(request: NextRequest) {
     `selectedPersona: ${selectedPersona}`,
     `companyStyle: ${companyStyle}`,
     `role: ${role}`,
+    `roleSpecificEvaluationFocus: ${evaluationFocus || "Infer appropriate entry-level criteria from the role, question, and answer."}`,
+    `sharedCareerIntelligenceData: ${JSON.stringify({
+      sourceNote: careerDataCopy[language],
+      requiredSkills: roleTemplate.requiredSkills,
+      interviewFocus: roleTemplate.interviewFocus,
+      commonRisks: roleTemplate.commonRisks,
+      recommendedProjects: roleTemplate.recommendedProjects,
+      beginnerEntryPoints: roleTemplate.beginnerEntryPoints,
+    })}`,
     `question: ${question}`,
     `userAnswer: ${userAnswer}`,
   ].join("\n");
@@ -115,13 +129,21 @@ export async function POST(request: NextRequest) {
     weaknesses: safeList(parsed?.weaknesses, fallback.weaknesses, 5),
     recommendations: safeList(parsed?.recommendations, fallback.recommendations, 5),
     nextPracticeQuestion: cleanText(parsed?.nextPracticeQuestion, 700) || fallback.nextPracticeQuestion,
+    roleData: {
+      sourceNote: careerDataCopy[language],
+      requiredSkills: roleTemplate.requiredSkills,
+      interviewFocus: roleTemplate.interviewFocus,
+      commonRisks: roleTemplate.commonRisks,
+      recommendedProjects: roleTemplate.recommendedProjects,
+      beginnerEntryPoints: roleTemplate.beginnerEntryPoints,
+    },
   };
 
   const userId = await getUserIdFromRequest(request);
   const saved = await saveEvaluation({
     userId,
     featureType: "hiring-manager",
-    input: { selectedPersona, companyStyle, role, question, userAnswer },
+    input: { selectedPersona, companyStyle, role, evaluationFocus, roleTemplate, question, userAnswer },
     output: result,
     overallScore: result.overallScore,
     language,

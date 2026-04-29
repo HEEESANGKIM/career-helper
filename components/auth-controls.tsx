@@ -98,7 +98,7 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
           <Link
             key={item.href}
             href={item.href}
-            className={`shrink-0 rounded-full px-3 py-2 text-xs font-medium transition ${
+            className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition ${
               item.active
                 ? "bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-white shadow-[0_10px_26px_rgba(124,58,237,0.28)]"
                 : "text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--foreground)]"
@@ -116,7 +116,7 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
           <Link
             key={item.href}
             href={item.href}
-            className={`rounded-full px-3 py-2 text-xs font-medium transition ${
+            className={`rounded-full px-3.5 py-2 text-xs font-medium transition ${
               item.active
                 ? "bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-white shadow-[0_10px_26px_rgba(124,58,237,0.28)]"
                 : "text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--foreground)]"
@@ -126,20 +126,20 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
           </Link>
         ))}
       </nav>
-      <Link href="/my-info" className="secondary-btn px-2.5 py-2 text-[11px] sm:px-3 sm:text-xs">
-        Account
+      <Link href="/my-info" className="secondary-btn px-3 py-2 text-xs">
+        {isKo ? "계정" : "Account"}
       </Link>
-      <button onClick={handleLogout} className="secondary-btn px-2.5 py-2 text-[11px] sm:px-3 sm:text-xs">
-        Log out
+      <button onClick={handleLogout} className="secondary-btn px-3 py-2 text-xs">
+        {isKo ? "로그아웃" : "Log out"}
       </button>
     </div>
   ) : (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <Link href="/login" className="secondary-btn px-2.5 py-2 text-[11px] sm:px-3 sm:text-xs">
-        Log in
+      <Link href="/login" className="secondary-btn px-3 py-2 text-xs">
+        {isKo ? "로그인" : "Log in"}
       </Link>
-      <Link href="/register" className="primary-btn px-2.5 py-2 text-[11px] sm:px-3 sm:text-xs">
-        Sign up
+      <Link href="/register" className="primary-btn px-3 py-2 text-xs">
+        {isKo ? "가입" : "Sign up"}
       </Link>
     </div>
   );

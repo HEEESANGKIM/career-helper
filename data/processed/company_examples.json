@@ -1,0 +1,4 @@
+[
+  { "source": "OFLC H-1B disclosure local-file pipeline", "company_type": "large technology employer", "example_roles": ["Software Engineer", "Data Analyst", "Product Manager"], "note": "Examples should be derived only from manually downloaded OFLC files." },
+  { "source": "OFLC H-1B disclosure local-file pipeline", "company_type": "consulting / business services", "example_roles": ["Business Analyst", "Finance Analyst"], "note": "No private or login-gated sources are used." }
+]

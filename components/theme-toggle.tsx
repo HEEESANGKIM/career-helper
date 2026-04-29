@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Moon, Sun } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 
 type ThemeMode = "dark" | "light";
@@ -32,11 +33,12 @@ export default function ThemeToggle() {
 
   const isDark = mode === "dark";
   const label = language === "en" ? `Switch to ${isDark ? "light" : "dark"} mode` : `${isDark ? "라이트" : "다크"} 모드로 전환`;
+  const Icon = isDark ? Moon : Sun;
 
   return (
     <button type="button" onClick={toggleMode} aria-label={label} title={label} className="secondary-btn px-3 py-2 text-xs">
-      <span aria-hidden>{isDark ? "Moon" : "Sun"}</span>
-      <span className="hidden sm:inline">{isDark ? "Dark" : "Light"}</span>
+      <Icon size={15} aria-hidden="true" />
+      <span className="hidden sm:inline">{language === "en" ? (isDark ? "Dark" : "Light") : isDark ? "다크" : "라이트"}</span>
     </button>
   );
 }

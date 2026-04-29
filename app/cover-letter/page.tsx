@@ -196,17 +196,17 @@ export default function CoverLetterPage() {
 
         <PagePanel>
           <SectionTitle title={t("생성 결과", "Generated Result")} description={t("편집 가능한 에디터 형태로 초안을 검토하세요.", "Review the draft in an editor-style output panel.")} />
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="responsive-card-grid mt-5">
             <div className="content-card p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">Tone</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{t("톤", "Tone")}</p>
               <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{toneOptions.find((option) => option.value === tone)?.label}</p>
             </div>
             <div className="content-card p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">Evidence</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{t("근거", "Evidence")}</p>
               <div className="signal-bar mt-3"><div className="signal-fill" style={{ width: `${Math.min(100, Math.max(12, resumeText.length / 8))}%` }} /></div>
             </div>
             <div className="content-card p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">JD Align</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{t("공고 정렬", "JD Align")}</p>
               <div className="signal-bar mt-3"><div className="signal-fill" style={{ width: `${jobDescription.trim() ? 78 : 18}%` }} /></div>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function CoverLetterPage() {
           )}
           <div className="content-card mt-5 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--warning)]">{t("Missing evidence hints", "Missing evidence hints")}</p>
-            <ul className="mt-3 space-y-2 text-sm leading-6 text-[var(--muted)]">
+            <ul className="ko-friendly mt-3 space-y-2 text-sm leading-6 text-[var(--muted)]">
               {!/\d/.test(resumeText) ? <li>{t("정량 성과 숫자를 추가하면 설득력이 좋아집니다.", "Add measurable numbers to strengthen credibility.")}</li> : null}
               {!jobDescription.trim() ? <li>{t("공고 설명을 넣으면 JD alignment가 올라갑니다.", "Add the job description to improve JD alignment.")}</li> : null}
               {resumeText.length < 300 ? <li>{t("프로젝트 역할과 결과를 더 구체화하세요.", "Add more detail about project role and outcomes.")}</li> : null}

@@ -30,18 +30,19 @@ type BackgroundResult = {
 
 const copy = {
   ko: {
-    eyebrow: "채용 담당자 신호",
+    eyebrow: "평판 체크",
     title: "Background Check Preview",
-    description: "직접 제공한 공개 프로필 콘텐츠만 GPT로 점검합니다.",
-    notice: "이 기능은 Google, LinkedIn, GitHub, Reddit, Twitter/X, Blind 또는 웹을 실제로 스크래핑하지 않습니다. 사용자가 붙여넣은 링크와 텍스트만 평가합니다.",
-    links: "공개 프로필 링크",
-    linksHelp: "한 줄에 하나씩 입력하세요. 링크 자체는 라벨로만 사용되며 실제 접속하지 않습니다.",
-    content: "붙여넣은 공개 콘텐츠 / 요약",
+    description: "직접 제공한 공개 프로필 콘텐츠만 평가해 채용 담당자 관점의 위험 신호를 확인합니다.",
+    notice: "Google, LinkedIn, GitHub, Reddit, Twitter/X, Blind 또는 웹을 스크래핑하지 않습니다. 사용자가 제출한 링크와 텍스트만 평가합니다.",
+    links: "공개 링크",
+    linksHelp: "한 줄에 하나씩 입력하세요. 링크는 라벨로만 사용되며 실제 접속하지 않습니다.",
+    content: "공개 콘텐츠 / 요약",
     contentPlaceholder: "LinkedIn 소개, GitHub README 요약, 포트폴리오 문구, 공개 게시글 등 직접 제공 가능한 내용을 붙여넣으세요.",
-    evaluate: "GPT 점검 실행",
-    evaluating: "점검 중...",
+    evaluate: "평가하기",
+    evaluating: "평가 중...",
     overall: "전체 점수",
     status: "상태",
+    risks: "주요 위험",
     recruiterView: "채용 담당자 시뮬레이션",
     critical: "중요 이슈",
     warnings: "경고",
@@ -51,24 +52,31 @@ const copy = {
     fix: "수정 제안",
     error: "평가를 완료하지 못했습니다.",
     saved: "저장됨",
-    demo: "데모 폴백",
+    demo: "데모",
     emptyCritical: "중요 이슈가 감지되지 않았습니다.",
     emptyWarnings: "경고가 감지되지 않았습니다.",
+    summary: "요약",
+    impression: "첫인상",
+    afterCleanup: "정리 후",
+    runHelper: "평가를 실행하면 점수와 리포트가 표시됩니다.",
+    visibleUpside: "긍정 신호",
+    actionPlan: "실행 계획",
   },
   en: {
     eyebrow: "Recruiter Signal",
     title: "Background Check Preview",
-    description: "Evaluate only the public-profile content you provide.",
+    description: "Evaluate only the public-profile content you provide and preview recruiter-visible risks.",
     notice: "This feature does not scrape Google, LinkedIn, GitHub, Reddit, Twitter/X, Blind, or the web. It only evaluates links and text you submit.",
-    links: "Public profile links",
-    linksHelp: "Enter one per line. Links are treated as labels only; the server does not visit them.",
-    content: "Pasted public content / summary",
+    links: "Public links",
+    linksHelp: "Enter one per line. Links are labels only; the server does not visit them.",
+    content: "Public content / summary",
     contentPlaceholder: "Paste LinkedIn bio text, GitHub README summary, portfolio copy, public posts, or any manually provided content.",
-    evaluate: "Run GPT Preview",
+    evaluate: "Evaluate",
     evaluating: "Evaluating...",
     overall: "Overall Score",
     status: "Status",
-    recruiterView: "Recruiter View Simulation",
+    risks: "Main risks",
+    recruiterView: "Recruiter View",
     critical: "Critical Issues",
     warnings: "Warnings",
     strengths: "Strengths",
@@ -77,9 +85,15 @@ const copy = {
     fix: "Suggested fix",
     error: "Could not complete evaluation.",
     saved: "Saved",
-    demo: "Demo fallback",
+    demo: "Demo",
     emptyCritical: "No critical issues detected.",
     emptyWarnings: "No warnings detected.",
+    summary: "Summary",
+    impression: "Impression",
+    afterCleanup: "After cleanup",
+    runHelper: "Run evaluation to see score and report.",
+    visibleUpside: "Visible upside",
+    actionPlan: "Action plan",
   },
 };
 
@@ -87,7 +101,7 @@ function IssueCard({ issue, tone, labels }: { issue: Issue; tone: "critical" | "
   const isCritical = tone === "critical";
 
   return (
-    <article className="content-card p-4">
+    <article className="content-card p-5">
       <div className="flex items-start gap-3">
         <span
           className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${
@@ -99,9 +113,9 @@ function IssueCard({ issue, tone, labels }: { issue: Issue; tone: "critical" | "
           <AlertTriangle size={17} aria-hidden="true" />
         </span>
         <div>
-          <h3 className="text-sm font-semibold leading-6 text-[var(--foreground)]">{issue.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]"><strong className="text-[var(--muted-strong)]">{labels.risk}:</strong> {issue.risk}</p>
-          <p className="mt-1 text-sm leading-6 text-[var(--muted)]"><strong className="text-[var(--muted-strong)]">{labels.fix}:</strong> {issue.suggestedFix}</p>
+          <h3 className="ko-friendly text-base font-semibold leading-7 text-[var(--foreground)]">{issue.title}</h3>
+          <p className="ko-friendly mt-2 text-sm leading-7 text-[var(--muted)]"><strong className="text-[var(--muted-strong)]">{labels.risk}:</strong> {issue.risk}</p>
+          <p className="ko-friendly mt-1 text-sm leading-7 text-[var(--muted)]"><strong className="text-[var(--muted-strong)]">{labels.fix}:</strong> {issue.suggestedFix}</p>
         </div>
       </div>
     </article>
@@ -111,6 +125,7 @@ function IssueCard({ issue, tone, labels }: { issue: Issue; tone: "critical" | "
 export default function BackgroundCheckPage() {
   const { language } = useLanguage();
   const t = copy[language];
+  const isEn = language === "en";
   const [links, setLinks] = useState("https://github.com/example\nhttps://linkedin.com/in/example");
   const [content, setContent] = useState("");
   const [result, setResult] = useState<BackgroundResult | null>(null);
@@ -144,13 +159,15 @@ export default function BackgroundCheckPage() {
     }
   };
 
+  const riskCount = result ? result.criticalIssues.length + result.warnings.length : 0;
+
   return (
     <PageShell maxWidth="max-w-7xl">
       <PageHeader eyebrow={t.eyebrow} title={t.title} description={t.description} />
 
-      <Notice className="mb-5">{t.notice}</Notice>
+      <Notice className="ko-friendly mb-5">{t.notice}</Notice>
 
-      <section className="grid gap-5 lg:grid-cols-[0.72fr_1.28fr]">
+      <section className="readable-grid-2">
         <PagePanel>
           <SectionTitle title={t.links} description={t.linksHelp} />
           <textarea value={links} onChange={(event) => setLinks(event.target.value)} className="field mt-5 min-h-28" />
@@ -166,67 +183,61 @@ export default function BackgroundCheckPage() {
         </PagePanel>
 
         <PagePanel>
-          <SectionTitle title={t.recruiterView} description={result?.evaluationId ? t.saved : result?.source === "demo_fallback" ? t.demo : "OpenAI"} />
+          <SectionTitle title={t.recruiterView} description={result?.evaluationId ? t.saved : result?.source === "demo_fallback" ? t.demo : undefined} />
+          <div className="responsive-card-grid mt-5">
+            <MetricTile label={t.overall} value={result ? `${result.overallScore}/100` : "--"} helper={result ? undefined : t.runHelper} />
+            <MetricTile label={t.status} value={result?.status ?? "--"} />
+            <MetricTile label={t.risks} value={result ? riskCount : "--"} />
+          </div>
           {result ? (
-            <div className="mt-5 grid gap-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <MetricTile label={t.overall} value={`${result.overallScore}/100`} />
-                <MetricTile label={t.status} value={result.status} />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  ["Summary", result.recruiterViewSimulation.summary],
-                  ["Impression", result.recruiterViewSimulation.estimatedImpression],
-                  ["After cleanup", result.recruiterViewSimulation.afterCleanup],
-                ].map(([label, value]) => (
-                  <div key={label} className="content-card p-4">
-                    <div className="flex items-center gap-3">
-                      <Eye size={17} className="text-[var(--accent-2)]" aria-hidden="true" />
-                      <p className="text-sm font-semibold text-[var(--foreground)]">{label}</p>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{value}</p>
+            <div className="mt-5 grid gap-3">
+              {[
+                [t.summary, result.recruiterViewSimulation.summary],
+                [t.impression, result.recruiterViewSimulation.estimatedImpression],
+                [t.afterCleanup, result.recruiterViewSimulation.afterCleanup],
+              ].map(([label, value]) => (
+                <div key={label} className="content-card p-5">
+                  <div className="flex items-center gap-3">
+                    <Eye size={17} className="text-[var(--accent-2)]" aria-hidden="true" />
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{label}</p>
                   </div>
-                ))}
-              </div>
+                  <p className="ko-friendly mt-3 text-sm leading-7 text-[var(--muted)]">{value}</p>
+                </div>
+              ))}
             </div>
-          ) : (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <MetricTile label={t.overall} value="--" helper={language === "en" ? "Run preview to calculate" : "점검 실행 후 계산됩니다"} />
-              <MetricTile label={t.status} value="--" helper={language === "en" ? "Provided content only" : "제공 콘텐츠만 사용"} />
-            </div>
-          )}
+          ) : null}
         </PagePanel>
       </section>
 
       {result ? (
         <>
-          <section className="mt-5 grid gap-5 lg:grid-cols-2">
+          <section className="mt-5 grid gap-5 xl:grid-cols-2">
             <PagePanel>
-              <SectionTitle title={t.critical} description={language === "en" ? "High-priority issues in submitted content." : "제출 콘텐츠에서 확인된 고우선순위 이슈"} />
+              <SectionTitle title={t.critical} description={isEn ? "High-priority issues in submitted content." : "제출 콘텐츠에서 확인된 고우선순위 이슈입니다."} />
               <div className="mt-5 grid gap-3">
                 {result.criticalIssues.length ? result.criticalIssues.map((issue) => <IssueCard key={issue.title} issue={issue} tone="critical" labels={t} />) : <Notice>{t.emptyCritical}</Notice>}
               </div>
             </PagePanel>
 
             <PagePanel>
-              <SectionTitle title={t.warnings} description={language === "en" ? "Medium-priority cleanup items." : "중간 우선순위 정리 항목"} />
+              <SectionTitle title={t.warnings} description={isEn ? "Medium-priority cleanup items." : "중간 우선순위 정리 항목입니다."} />
               <div className="mt-5 grid gap-3">
                 {result.warnings.length ? result.warnings.map((issue) => <IssueCard key={issue.title} issue={issue} tone="warning" labels={t} />) : <Notice>{t.emptyWarnings}</Notice>}
               </div>
             </PagePanel>
           </section>
 
-          <section className="mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="mt-5 readable-grid-2">
             <PagePanel>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <SectionTitle title={t.strengths} description={language === "en" ? "Positive signals in submitted material." : "제출 자료에서 보이는 긍정 신호"} />
-                <span className="accent-pill px-3 py-1 text-xs font-semibold"><ShieldCheck size={14} aria-hidden="true" />Visible upside</span>
+                <SectionTitle title={t.strengths} description={isEn ? "Positive signals in submitted material." : "제출 자료에서 보이는 긍정 신호입니다."} />
+                <span className="accent-pill w-fit px-3 py-1 text-xs font-semibold"><ShieldCheck size={14} aria-hidden="true" />{t.visibleUpside}</span>
               </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="responsive-card-grid mt-5">
                 {result.strengths.map((strength) => (
-                  <div key={strength} className="content-card p-4">
+                  <div key={strength} className="content-card p-5">
                     <CheckCircle2 size={18} className="text-[var(--success)]" aria-hidden="true" />
-                    <p className="mt-3 text-sm leading-6 text-[var(--muted-strong)]">{strength}</p>
+                    <p className="ko-friendly mt-3 text-sm leading-7 text-[var(--muted-strong)]">{strength}</p>
                   </div>
                 ))}
               </div>
@@ -234,14 +245,14 @@ export default function BackgroundCheckPage() {
 
             <PagePanel>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <SectionTitle title={t.checklist} description={language === "en" ? "Recommended actions before recruiter review." : "채용 담당자 검토 전 추천 조치"} />
-                <span className="accent-pill px-3 py-1 text-xs font-semibold"><Wrench size={14} aria-hidden="true" />Action plan</span>
+                <SectionTitle title={t.checklist} description={isEn ? "Recommended actions before recruiter review." : "채용 담당자 검토 전 추천 조치입니다."} />
+                <span className="accent-pill w-fit px-3 py-1 text-xs font-semibold"><Wrench size={14} aria-hidden="true" />{t.actionPlan}</span>
               </div>
               <div className="timeline-list mt-5">
                 {result.cleanupChecklist.map((item) => (
                   <div key={item} className="timeline-row">
                     <span className="timeline-marker" />
-                    <p className="text-sm leading-6 text-[var(--muted-strong)]">{item}</p>
+                    <p className="ko-friendly text-sm leading-7 text-[var(--muted-strong)]">{item}</p>
                     <ClipboardList size={16} className="text-[var(--accent-2)]" aria-hidden="true" />
                   </div>
                 ))}

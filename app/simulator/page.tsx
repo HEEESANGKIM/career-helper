@@ -43,7 +43,7 @@ const interviewQuestions: InterviewQuestion[] = [
     phase: "behavioral",
     questionKo: "제한된 가이드만 있는 모호한 문제를 해결했던 프로젝트를 설명해 주세요.",
     questionEn: "Tell me about a project where you had to solve an ambiguous problem with limited guidance.",
-    rubricKo: ["상황", "오너십", "행동", "결과"],
+    rubricKo: ["상황", "주도성", "행동", "결과"],
     rubricEn: ["Situation", "Ownership", "Action", "Result"],
   },
   {
@@ -55,7 +55,7 @@ const interviewQuestions: InterviewQuestion[] = [
   },
   {
     phase: "behavioral",
-    questionKo: "어려운 피드백을 받았을 때 어떻게 대응했는지 말해 주세요.",
+    questionKo: "어려운 피드백을 받았던 때와 어떻게 대응했는지 말해 주세요.",
     questionEn: "Tell me about a time you received difficult feedback and how you responded.",
     rubricKo: ["자기 인식", "학습", "커뮤니케이션", "결과"],
     rubricEn: ["Self-awareness", "Learning", "Communication", "Outcome"],
@@ -71,8 +71,8 @@ const interviewQuestions: InterviewQuestion[] = [
 
 const copy = {
   ko: {
-    eyebrow: "면접 시뮬레이터",
-    title: "실전 면접 세션을 연습하세요",
+    eyebrow: "면접 연습",
+    title: "실전 면접 흐름을 연습하세요.",
     description: "질문, 답변, API 기반 평가, 후속 질문, 세션 요약으로 이어지는 구조화된 면접 루프입니다.",
     dashboard: "대시보드",
     reset: "세션 초기화",
@@ -81,8 +81,8 @@ const copy = {
     ready: "면접 준비 양호",
     nearly: "거의 준비됨",
     needs: "연습 필요",
-    heroTitle: "압박감을 시뮬레이션하고 답변의 신호를 선명하게 만드세요.",
-    heroBody: "평가는 서버 API를 통해 진행되며, 답변의 구조, 근거, 기술 깊이, 임팩트를 현실적으로 점검합니다.",
+    heroTitle: "압박감을 시뮬레이션하고 답변 신호를 선명하게 만드세요.",
+    heroBody: "평가는 서버 API를 통해 진행되며 답변 구조, 근거, 기술 깊이, 임팩트를 현실적으로 점검합니다.",
     sessionScore: "세션 점수",
     answered: "답변 수",
     currentQuestion: "현재 질문",
@@ -95,12 +95,12 @@ const copy = {
     answerWorkspace: "답변 작성",
     answerWorkspaceDesc: "답변을 작성하고 평가한 뒤 후속 질문으로 이어가세요.",
     yourAnswer: "내 답변",
-    placeholder: "상황, 내 역할, 행동, 결과, 정량적 임팩트를 포함해 작성하세요.",
+    placeholder: "상황, 역할, 행동, 결과, 정량적 임팩트를 포함해 작성하세요.",
     evaluate: "답변 평가",
     evaluating: "평가 중...",
     answerFollowup: "후속 질문 답하기",
     evaluation: "평가 결과",
-    evaluationDesc: "답변 내용 기반의 구조화 평가입니다.",
+    evaluationDesc: "실제 답변 내용을 기반으로 한 구조화된 피드백입니다.",
     emptyEval: "답변을 작성하고 평가하면 점수, 강점, 개선점이 표시됩니다.",
     score: "점수",
     strengths: "강점: ",
@@ -108,14 +108,23 @@ const copy = {
     followup: "후속 질문",
     nextStep: "다음 단계",
     analytics: "세션 분석",
-    analyticsDesc: "현재 면접 세션의 요약 신호입니다.",
-    history: "최근 답변 히스토리",
+    analyticsDesc: "현재 면접 세션의 핵심 신호입니다.",
+    history: "최근 답변 기록",
     historyDesc: "이번 세션에서 평가한 최근 3개 답변입니다.",
     noHistory: "아직 평가된 답변이 없습니다. 첫 질문으로 세션을 시작하세요.",
     previous: "평가 후 이전 질문과 점수가 여기에 표시됩니다.",
     latest: "최근",
     average: "평균",
     evaluatedResponses: "평가된 답변",
+    debtTracker: "인터뷰 부채 트래커",
+    debtDesc: "반복되는 약점 패턴을 추적합니다.",
+    severity: "심각도",
+    repeated: "반복 약점",
+    trend: "추세",
+    improving: "개선 중",
+    worsening: "악화 중",
+    stable: "유지",
+    recommendedDrill: "추천 드릴",
     strongestHigh: "근거와 구조가 강합니다",
     strongestMid: "기본기는 좋고 임팩트 보강이 필요합니다",
     strongestLow: "더 많은 연습이 필요합니다",
@@ -129,7 +138,7 @@ const copy = {
     },
     phaseDesc: {
       intro: "넓은 질문으로 시작해 맥락을 잡습니다.",
-      behavioral: "오너십, 판단력, 커뮤니케이션을 보여주세요.",
+      behavioral: "주도성, 판단력, 커뮤니케이션을 보여주세요.",
       technical: "트레이드오프, 시스템 사고, 디버깅 깊이를 설명하세요.",
       followup: "근거, 제약, 회고를 더 깊게 확인합니다.",
       summary: "세션 신호를 검토하고 다음 개선점을 정합니다.",
@@ -186,6 +195,15 @@ const copy = {
     latest: "Latest",
     average: "Average",
     evaluatedResponses: "Evaluated responses",
+    debtTracker: "Interview Debt Tracker",
+    debtDesc: "Tracks repeated weakness patterns over time.",
+    severity: "Severity",
+    repeated: "Repeated weakness",
+    trend: "Trend",
+    improving: "Improving",
+    worsening: "Worsening",
+    stable: "Stable",
+    recommendedDrill: "Recommended drill",
     strongestHigh: "Strong evidence and structured delivery",
     strongestMid: "Good baseline, keep sharpening impact",
     strongestLow: "Needs more practice",
@@ -211,7 +229,6 @@ const copy = {
     },
   },
 };
-
 function shorten(text: string, maxLength = 96) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
@@ -231,6 +248,13 @@ function getReadinessStatus(score: number, answered: number, text: typeof copy.k
   if (score >= 82) return { label: text.ready, className: "border-[color-mix(in_srgb,var(--success)_42%,var(--line))] bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--foreground)]" };
   if (score >= 68) return { label: text.nearly, className: "border-[color-mix(in_srgb,var(--accent-2)_42%,var(--line))] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] text-[var(--foreground)]" };
   return { label: text.needs, className: "border-[color-mix(in_srgb,var(--warning)_42%,var(--line))] bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-[var(--foreground)]" };
+}
+
+function debtSeverity(score: number, isEn: boolean) {
+  if (score >= 78) return { label: isEn ? "Critical" : "위험", className: "text-[var(--danger)]" };
+  if (score >= 58) return { label: isEn ? "High" : "높음", className: "text-[var(--warning)]" };
+  if (score >= 34) return { label: isEn ? "Medium" : "보통", className: "text-[var(--accent-2)]" };
+  return { label: isEn ? "Low" : "낮음", className: "text-[var(--success)]" };
 }
 
 export default function SimulatorPage() {
@@ -265,6 +289,71 @@ export default function SimulatorPage() {
     return { totalAnswered, latestScore, averageScore, strongestArea, readiness };
   }, [history, t]);
 
+  const interviewDebt = useMemo(() => {
+    const avg = (key: keyof NonNullable<EvaluationResult["categoryScores"]>) => {
+      if (!history.length) return 0;
+      return Math.round(history.reduce((sum, item) => sum + (item.result.categoryScores?.[key] ?? item.result.score), 0) / history.length);
+    };
+    const repeatedBelow = (key: keyof NonNullable<EvaluationResult["categoryScores"]>) =>
+      history.filter((item) => (item.result.categoryScores?.[key] ?? item.result.score) < 68).length;
+    const trendFor = (key: keyof NonNullable<EvaluationResult["categoryScores"]>) => {
+      if (history.length < 2) return t.stable;
+      const newest = history[0].result.categoryScores?.[key] ?? history[0].result.score;
+      const older = history[Math.min(history.length - 1, 3)].result.categoryScores?.[key] ?? history[Math.min(history.length - 1, 3)].result.score;
+      if (newest >= older + 6) return t.improving;
+      if (newest <= older - 6) return t.worsening;
+      return t.stable;
+    };
+    const confidenceDebt = history.length
+      ? Math.round(history.reduce((sum, item) => sum + (item.answer.length < 320 ? 72 : item.answer.length > 900 ? 38 : 52), 0) / history.length)
+      : 0;
+    const categories = [
+      {
+        label: isEn ? "Behavioral communication" : "행동 커뮤니케이션",
+        score: history.length ? 100 - avg("communication") : 0,
+        repeated: repeatedBelow("communication"),
+        trend: trendFor("communication"),
+        drill: isEn ? "Record 5 STAR answers with one measurable result each." : "정량 결과가 포함된 STAR 답변 5개를 녹음해 보세요.",
+      },
+      {
+        label: isEn ? "Technical fundamentals" : "기술 기본기",
+        score: history.length ? 100 - avg("technicalDepth") : 0,
+        repeated: repeatedBelow("technicalDepth"),
+        trend: trendFor("technicalDepth"),
+        drill: isEn ? "Explain one technical trade-off out loud every day for a week." : "일주일 동안 매일 기술 트레이드오프 1개를 말로 설명하세요.",
+      },
+      {
+        label: isEn ? "System design" : "시스템 설계",
+        score: history.length ? Math.max(0, 100 - Math.round((avg("problemSolving") + avg("technicalDepth")) / 2)) : 0,
+        repeated: Math.max(repeatedBelow("problemSolving"), repeatedBelow("technicalDepth")),
+        trend: trendFor("problemSolving"),
+        drill: isEn ? "Complete 3 structured system-design mocks with constraints first." : "제약조건부터 말하는 구조화 시스템 설계 모의면접 3회를 진행하세요.",
+      },
+      {
+        label: isEn ? "Coding clarity" : "코딩 설명력",
+        score: history.length ? 100 - avg("problemSolving") : 0,
+        repeated: repeatedBelow("problemSolving"),
+        trend: trendFor("problemSolving"),
+        drill: isEn ? "Practice explaining approach, edge cases, and complexity in order." : "접근법, 예외 케이스, 복잡도 순서로 설명하는 연습을 하세요.",
+      },
+      {
+        label: isEn ? "Confidence" : "자신감",
+        score: confidenceDebt,
+        repeated: history.filter((item) => item.answer.length < 320).length,
+        trend: history.length >= 2 && history[0].answer.length > history[history.length - 1].answer.length ? t.improving : t.stable,
+        drill: isEn ? "Use a 60-second answer timer, then repeat with stronger opening lines." : "60초 답변 타이머를 쓰고 첫 문장을 더 단단하게 반복하세요.",
+      },
+      {
+        label: isEn ? "Role-specific knowledge" : "직무 지식",
+        score: history.length ? 100 - avg("impact") : 0,
+        repeated: repeatedBelow("impact"),
+        trend: trendFor("impact"),
+        drill: isEn ? "Prepare 3 role-specific examples tied to business impact." : "비즈니스 임팩트와 연결된 직무별 사례 3개를 준비하세요.",
+      },
+    ];
+    return categories.map((item) => ({ ...item, score: Math.max(0, Math.min(100, item.score)), severity: debtSeverity(item.score, isEn) }));
+  }, [history, isEn, t]);
+
   const progressWidth = history.length > 0 ? Math.max(8, Math.min(100, sessionStats.averageScore)) : 0;
 
   const evaluate = async () => {
@@ -283,8 +372,8 @@ export default function SimulatorPage() {
           mode: "evaluate",
           question: currentQuestion,
           answer: trimmed,
-          targetRole: isEn ? "Software Engineer" : "소프트웨어 엔지니어",
           rubric: currentRubric,
+          targetRole: isEn ? "Software Engineer" : "소프트웨어 엔지니어",
           language,
         }),
       });
@@ -414,8 +503,8 @@ export default function SimulatorPage() {
               <span className="accent-pill px-3 py-1 text-xs font-medium backdrop-blur">{t.livePractice}</span>
               <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sessionStats.readiness.className}`}>{sessionStats.readiness.label}</span>
             </div>
-            <h2 className="mt-4 max-w-3xl text-3xl font-semibold leading-tight sm:text-4xl">{t.heroTitle}</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">{t.heroBody}</p>
+            <h2 className="ko-friendly mt-4 max-w-3xl text-3xl font-semibold leading-tight sm:text-4xl">{t.heroTitle}</h2>
+            <p className="ko-friendly mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">{t.heroBody}</p>
           </div>
           <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 backdrop-blur">
             <div className="flex items-center justify-between gap-4">
@@ -458,7 +547,7 @@ export default function SimulatorPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted-strong)] sm:grid-cols-3">
+          <div className="responsive-card-grid mt-6 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted-strong)]">
             <div><p className="font-medium text-[var(--foreground)]">{t.phase}</p><p className="mt-1">{t.phases[phase]}</p></div>
             <div><p className="font-medium text-[var(--foreground)]">{t.questionBank}</p><p className="mt-1">{interviewQuestions.length} prompts</p></div>
             <div><p className="font-medium text-[var(--foreground)]">{t.mode}</p><p className="mt-1">{t.modeValue}</p></div>
@@ -547,7 +636,7 @@ export default function SimulatorPage() {
           </div>
 
           {history.length > 0 ? (
-            <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            <div className="responsive-card-grid mt-5">
               <MetricTile label={t.answered} value={sessionStats.totalAnswered} helper={t.evaluatedResponses} />
               <MetricTile label={t.average} value={`${sessionStats.averageScore}%`} helper={sessionStats.strongestArea} />
               <MetricTile label={t.latest} value={`${sessionStats.latestScore}%`} helper={t.latest} />
@@ -555,12 +644,39 @@ export default function SimulatorPage() {
           ) : (
             <EmptyState>{t.noHistory}</EmptyState>
           )}
+
+          <div className="mt-6">
+            <SectionTitle title={t.debtTracker} description={t.debtDesc} />
+            <div className="mt-4 grid gap-3">
+              {interviewDebt.map((debt) => (
+                <article key={debt.label} className="content-card p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="ko-friendly text-sm font-semibold text-[var(--foreground)]">{debt.label}</p>
+                      <p className="ko-friendly mt-1 text-xs leading-5 text-[var(--muted)]">
+                        {t.repeated}: {debt.repeated} · {t.trend}: {debt.trend}
+                      </p>
+                    </div>
+                    <span className={`text-xs font-semibold ${debt.severity.className}`}>
+                      {t.severity}: {debt.severity.label}
+                    </span>
+                  </div>
+                  <div className="signal-bar mt-3">
+                    <div className="h-full rounded-full bg-[var(--warning)]" style={{ width: `${history.length ? Math.max(8, debt.score) : 0}%` }} />
+                  </div>
+                  <p className="ko-friendly mt-3 text-xs leading-5 text-[var(--muted)]">
+                    {t.recommendedDrill}: {debt.drill}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
         </PagePanel>
 
         <PagePanel>
           <SectionTitle title={t.history} description={t.historyDesc} />
           {history.length > 0 ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="responsive-card-grid mt-5">
               {history.slice(0, 3).map((item, index) => (
                 <article key={`${item.timestamp}-${item.result.score}`} className="rounded-2xl border border-[var(--line)] bg-gradient-to-br from-[var(--surface-strong)] to-[var(--surface)] p-4">
                   <div className="flex items-start justify-between gap-3">

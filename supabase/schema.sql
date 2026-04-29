@@ -252,6 +252,11 @@ create table if not exists public.career_simulations (
   created_at timestamptz not null default now()
 );
 
+alter table public.career_simulations add column if not exists input_json jsonb not null default '{}'::jsonb;
+alter table public.career_simulations add column if not exists output_json jsonb not null default '{}'::jsonb;
+alter table public.career_simulations add column if not exists language text not null default 'ko' check (language in ('ko', 'en'));
+alter table public.career_simulations add column if not exists selected_decisions jsonb not null default '[]'::jsonb;
+
 alter table public.career_simulations enable row level security;
 
 drop policy if exists "career_simulations_select_own" on public.career_simulations;
@@ -263,6 +268,138 @@ drop policy if exists "career_simulations_insert_own" on public.career_simulatio
 create policy "career_simulations_insert_own"
 on public.career_simulations for insert
 with check (auth.uid() = user_id);
+
+create table if not exists public.career_templates (
+  id uuid primary key default gen_random_uuid(),
+  role_key text not null unique,
+  role_name text not null,
+  template_json jsonb not null default '{}'::jsonb,
+  language text not null default 'ko' check (language in ('ko', 'en')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.career_templates enable row level security;
+
+drop policy if exists "career_templates_select_all" on public.career_templates;
+create policy "career_templates_select_all"
+on public.career_templates for select
+using (true);
+
+create table if not exists public.career_decisions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  simulation_id uuid references public.career_simulations(id) on delete cascade,
+  decision_key text not null,
+  decision_json jsonb not null default '{}'::jsonb,
+  language text not null default 'ko' check (language in ('ko', 'en')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.career_decisions enable row level security;
+
+drop policy if exists "career_decisions_select_own" on public.career_decisions;
+create policy "career_decisions_select_own"
+on public.career_decisions for select
+using (auth.uid() = user_id);
+
+drop policy if exists "career_decisions_insert_own" on public.career_decisions;
+create policy "career_decisions_insert_own"
+on public.career_decisions for insert
+with check (auth.uid() = user_id);
+
+create table if not exists public.synthetic_career_profiles (
+  id uuid primary key default gen_random_uuid(),
+  profile_id text not null unique,
+  target_role text,
+  profile_json jsonb not null default '{}'::jsonb,
+  source text not null default 'synthetic_fictional',
+  created_at timestamptz not null default now()
+);
+
+alter table public.synthetic_career_profiles enable row level security;
+
+drop policy if exists "synthetic_career_profiles_select_all" on public.synthetic_career_profiles;
+create policy "synthetic_career_profiles_select_all"
+on public.synthetic_career_profiles for select
+using (true);
+
+create table if not exists public.public_role_stats (
+  id uuid primary key default gen_random_uuid(),
+  role text not null unique,
+  stats_json jsonb not null default '{}'::jsonb,
+  source text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.public_role_stats enable row level security;
+
+drop policy if exists "public_role_stats_select_all" on public.public_role_stats;
+create policy "public_role_stats_select_all"
+on public.public_role_stats for select
+using (true);
+
+create table if not exists public.salary_bands (
+  id uuid primary key default gen_random_uuid(),
+  role text not null unique,
+  salary_json jsonb not null default '{}'::jsonb,
+  source text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.salary_bands enable row level security;
+
+drop policy if exists "salary_bands_select_all" on public.salary_bands;
+create policy "salary_bands_select_all"
+on public.salary_bands for select
+using (true);
+
+create table if not exists public.career_readiness_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  target_role text,
+  overall_score integer,
+  skill_match_score integer,
+  resume_score integer,
+  interview_score integer,
+  portfolio_score integer,
+  market_alignment_score integer,
+  background_score integer,
+  input_json jsonb not null default '{}'::jsonb,
+  explanation_json jsonb not null default '{}'::jsonb,
+  language text not null default 'ko' check (language in ('ko', 'en')),
+  created_at timestamptz not null default now()
+);
+
+alter table public.career_readiness_snapshots enable row level security;
+
+drop policy if exists "career_readiness_snapshots_select_own" on public.career_readiness_snapshots;
+create policy "career_readiness_snapshots_select_own"
+on public.career_readiness_snapshots for select
+using (auth.uid() = user_id);
+
+drop policy if exists "career_readiness_snapshots_insert_own" on public.career_readiness_snapshots;
+create policy "career_readiness_snapshots_insert_own"
+on public.career_readiness_snapshots for insert
+with check (auth.uid() = user_id);
+
+insert into public.career_templates (role_key, role_name, language, template_json)
+values
+  ('software-engineer', 'Software Engineer', 'en', '{"entryPoints":["Junior Developer","Frontend Intern"],"skills":["Git","Web/API","Debugging"],"projects":["CRUD app","API dashboard"],"risks":["Weak technical depth"],"interviewFocus":["Problem solving","Debugging"]}'::jsonb),
+  ('data-analyst', 'Data Analyst', 'en', '{"entryPoints":["Data Intern","Reporting Assistant"],"skills":["SQL","Visualization","Metrics"],"projects":["Dashboard","Insight report"],"risks":["Weak business interpretation"],"interviewFocus":["Metrics","Assumptions"]}'::jsonb),
+  ('ui-ux-designer', 'UI/UX Designer', 'en', '{"entryPoints":["UX Intern","Junior Product Designer"],"skills":["Figma","Research","Prototyping"],"projects":["Case study","App redesign"],"risks":["Weak user evidence"],"interviewFocus":["Empathy","Process"]}'::jsonb),
+  ('product-manager', 'Product Manager', 'en', '{"entryPoints":["PM Intern","Product Operations"],"skills":["Problem framing","Metrics","Prioritization"],"projects":["PRD","Experiment plan"],"risks":["Limited product experience"],"interviewFocus":["Product sense","Priority"]}'::jsonb),
+  ('digital-marketer', 'Digital Marketer', 'en', '{"entryPoints":["Marketing Intern","Content Assistant"],"skills":["SEO","Campaigns","Metrics"],"projects":["Campaign plan","SEO posts"],"risks":["Few performance metrics"],"interviewFocus":["Audience","Channels"]}'::jsonb),
+  ('software-engineer-ko', '소프트웨어 엔지니어', 'ko', '{"entryPoints":["주니어 개발자","프론트엔드 인턴"],"skills":["Git","웹/API","디버깅"],"projects":["CRUD 앱","API 대시보드"],"risks":["기술 깊이 부족"],"interviewFocus":["문제 해결","디버깅"]}'::jsonb),
+  ('data-analyst-ko', '데이터 분석가', 'ko', '{"entryPoints":["데이터 인턴","리포팅 어시스턴트"],"skills":["SQL","시각화","지표"],"projects":["대시보드","인사이트 리포트"],"risks":["비즈니스 해석 약함"],"interviewFocus":["지표","가정"]}'::jsonb),
+  ('ui-ux-designer-ko', 'UI/UX 디자이너', 'ko', '{"entryPoints":["UX 인턴","주니어 프로덕트 디자이너"],"skills":["Figma","리서치","프로토타입"],"projects":["케이스스터디","앱 리디자인"],"risks":["사용자 근거 부족"],"interviewFocus":["공감","프로세스"]}'::jsonb)
+on conflict (role_key) do update
+set role_name = excluded.role_name,
+    language = excluded.language,
+    template_json = excluded.template_json,
+    updated_at = now();
 
 create table if not exists public.background_reports (
   id uuid primary key default gen_random_uuid(),

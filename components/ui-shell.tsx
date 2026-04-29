@@ -11,7 +11,7 @@ type PageShellProps = {
   center?: boolean;
 };
 
-export function PageShell({ children, maxWidth = "max-w-6xl", center = false }: PageShellProps) {
+export function PageShell({ children, maxWidth = "max-w-7xl", center = false }: PageShellProps) {
   if (center) {
     return (
       <main className="app-bg px-4 py-8 sm:px-6 lg:px-8">
@@ -24,7 +24,7 @@ export function PageShell({ children, maxWidth = "max-w-6xl", center = false }: 
 
   return (
     <main className="app-bg px-4 py-7 sm:px-6 lg:px-8">
-      <div className="cockpit-shell mx-auto w-full max-w-[1480px]">
+      <div className="cockpit-shell mx-auto w-full max-w-[1560px]">
         <CockpitRail />
         <div className={`min-w-0 ${maxWidth}`}>
           {children}
@@ -54,8 +54,8 @@ export function PageHeader({
           <p className="page-kicker">
             {eyebrow}
           </p>
-          <h1 className="gradient-title mt-5 max-w-4xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">{title}</h1>
-          {description ? <p className="mt-4 max-w-3xl text-base leading-7 text-[var(--muted)]">{description}</p> : null}
+          <h1 className="gradient-title ko-friendly mt-5 max-w-5xl text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">{title}</h1>
+          {description ? <p className="ko-friendly mt-4 max-w-4xl text-base leading-7 text-[var(--muted)]">{description}</p> : null}
         </div>
         {actions ? <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">{actions}</div> : null}
       </div>
@@ -76,9 +76,9 @@ export function SectionTitle({ title, description }: { title: string; descriptio
     <div>
       <div className="flex items-center gap-3">
         <span className="h-2.5 w-2.5 rounded-full bg-[var(--accent-strong)] shadow-[0_0_18px_rgba(159,242,229,0.65)]" />
-        <h2 className="text-lg font-semibold tracking-tight text-[var(--foreground)] sm:text-xl">{title}</h2>
+        <h2 className="ko-friendly text-lg font-semibold tracking-tight text-[var(--foreground)] sm:text-xl">{title}</h2>
       </div>
-      {description ? <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p> : null}
+      {description ? <p className="ko-friendly mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p> : null}
     </div>
   );
 }
@@ -93,10 +93,10 @@ export function MetricTile({
   helper?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-[var(--line)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_14%,transparent),var(--surface))] p-4 shadow-[0_18px_46px_rgba(0,0,0,0.20)]">
+    <div className="rounded-2xl border border-[var(--line)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_14%,transparent),var(--surface))] p-5 shadow-[0_18px_46px_rgba(0,0,0,0.20)]">
       <p className="text-xs font-medium uppercase tracking-[0.06em] text-[var(--muted)]">{label}</p>
-      <div className="mt-3 text-3xl font-semibold leading-none text-[var(--foreground)]">{value}</div>
-      {helper ? <p className="mt-3 text-sm leading-5 text-[var(--muted)]">{helper}</p> : null}
+      <div className="ko-friendly mt-3 text-2xl font-semibold leading-tight text-[var(--foreground)] sm:text-3xl">{value}</div>
+      {helper ? <p className="ko-friendly mt-3 text-sm leading-6 text-[var(--muted)]">{helper}</p> : null}
     </div>
   );
 }

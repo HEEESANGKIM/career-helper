@@ -1,0 +1,5 @@
+[
+  { "role": "Software Engineer", "common_keywords": ["JavaScript", "Python", "API", "Git", "debugging"], "beginner_signals": ["internship", "project", "CS fundamentals"] },
+  { "role": "Data Analyst", "common_keywords": ["SQL", "Excel", "dashboard", "Tableau", "statistics"], "beginner_signals": ["reporting", "public data project", "business insights"] },
+  { "role": "HR Coordinator", "common_keywords": ["scheduling", "documentation", "HRIS", "communication"], "beginner_signals": ["coordination", "confidentiality", "professionalism"] }
+]

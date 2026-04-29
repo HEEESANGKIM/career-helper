@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export type LanguageMode = "ko" | "en";
 
@@ -24,8 +25,47 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = useState<LanguageMode>(detectLanguage);
 
   useEffect(() => {
+    const loadProfileLanguage = async () => {
+      if (!supabase || !isSupabaseConfigured) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) return;
+
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("preferred_language")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (data?.preferred_language === "ko" || data?.preferred_language === "en") {
+        setLanguage(data.preferred_language);
+      }
+    };
+
+    void loadProfileLanguage();
+  }, []);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, language);
     document.documentElement.lang = language === "ko" ? "ko" : "en";
+
+    const saveProfileLanguage = async () => {
+      if (!supabase || !isSupabaseConfigured) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) return;
+
+      await supabase.from("user_profiles").upsert(
+        {
+          user_id: userId,
+          preferred_language: language,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+    };
+
+    void saveProfileLanguage();
   }, [language]);
 
   const value = useMemo(() => ({ language, setLanguage }), [language]);

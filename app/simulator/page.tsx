@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { EmptyState, MetricTile, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+
 import { useLanguage } from "@/components/language-provider";
 
 type InterviewPhase = "intro" | "behavioral" | "technical" | "followup" | "summary";
 
 type InterviewQuestion = {
   phase: Extract<InterviewPhase, "behavioral" | "technical">;
-  question: string;
-  rubric: string[];
+  questionKo: string;
+  questionEn: string;
+  rubricKo: string[];
+  rubricEn: string[];
 };
 
 type EvaluationResult = {
@@ -18,6 +21,14 @@ type EvaluationResult = {
   summary: string;
   strengths: string[];
   improvements: string[];
+  categoryScores?: {
+    problemSolving?: number;
+    technicalDepth?: number;
+    communication?: number;
+    impact?: number;
+  };
+  hiringSignal?: string;
+  nextStepAdvice?: string[];
 };
 
 type HistoryItem = {
@@ -30,128 +41,215 @@ type HistoryItem = {
 const interviewQuestions: InterviewQuestion[] = [
   {
     phase: "behavioral",
-    question: "Tell me about a project where you had to solve an ambiguous problem with limited guidance.",
-    rubric: ["Situation", "Ownership", "Action", "Result"],
+    questionKo: "제한된 가이드만 있는 모호한 문제를 해결했던 프로젝트를 설명해 주세요.",
+    questionEn: "Tell me about a project where you had to solve an ambiguous problem with limited guidance.",
+    rubricKo: ["상황", "오너십", "행동", "결과"],
+    rubricEn: ["Situation", "Ownership", "Action", "Result"],
   },
   {
     phase: "technical",
-    question: "Describe a technical decision you made recently. What trade-offs did you consider?",
-    rubric: ["Technical depth", "Trade-offs", "Reasoning", "Impact"],
+    questionKo: "최근 내린 기술적 결정을 설명해 주세요. 어떤 트레이드오프를 고려했나요?",
+    questionEn: "Describe a technical decision you made recently. What trade-offs did you consider?",
+    rubricKo: ["기술 깊이", "트레이드오프", "추론", "임팩트"],
+    rubricEn: ["Technical depth", "Trade-offs", "Reasoning", "Impact"],
   },
   {
     phase: "behavioral",
-    question: "Tell me about a time you received difficult feedback and how you responded.",
-    rubric: ["Self-awareness", "Learning", "Communication", "Outcome"],
+    questionKo: "어려운 피드백을 받았을 때 어떻게 대응했는지 말해 주세요.",
+    questionEn: "Tell me about a time you received difficult feedback and how you responded.",
+    rubricKo: ["자기 인식", "학습", "커뮤니케이션", "결과"],
+    rubricEn: ["Self-awareness", "Learning", "Communication", "Outcome"],
   },
   {
     phase: "technical",
-    question: "Walk me through how you would debug a production issue that users are reporting intermittently.",
-    rubric: ["Debugging process", "Prioritization", "Observability", "Prevention"],
+    questionKo: "사용자가 간헐적으로 보고하는 프로덕션 이슈를 어떻게 디버깅할지 설명해 주세요.",
+    questionEn: "Walk me through how you would debug a production issue that users are reporting intermittently.",
+    rubricKo: ["디버깅 과정", "우선순위", "관측 가능성", "재발 방지"],
+    rubricEn: ["Debugging process", "Prioritization", "Observability", "Prevention"],
   },
 ];
 
-function evaluateAnswer(answer: string): EvaluationResult {
-  const trimmed = answer.trim();
-  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
-  const hasNumbers = /\d|percent|%|users|requests|seconds|minutes|hours|revenue|cost|latency|명|개|%|건|시간|분|초|원|억|만/i.test(trimmed);
-  const hasStructure = /situation|task|action|result|because|therefore|first|then|finally|상황|역할|행동|결과|먼저|그래서|마지막으로|왜냐하면/i.test(trimmed);
-  const hasChallenge = /challenge|difficult|hard|blocked|issue|risk|conflict|trade-?off|problem|어려움|문제|도전|갈등|리스크|힘들었|막혔/i.test(trimmed);
-
-  const score = Math.max(
-    35,
-    Math.min(95, 42 + Math.min(25, wordCount) + (hasNumbers ? 12 : 0) + (hasStructure ? 9 : 0) + (hasChallenge ? 7 : 0)),
-  );
-
-  return {
-    score,
-    summary:
-      score >= 80
-        ? "Strong answer with clear evidence and a credible decision path."
-        : score >= 65
-          ? "Solid foundation, but the answer needs sharper evidence and more specific outcomes."
-          : "The answer is understandable, but it needs more context, action detail, and measurable impact.",
-    strengths: [
-      hasStructure ? "The response has a clear narrative structure." : "The response identifies the main topic directly.",
-      hasChallenge ? "It includes some complexity or challenge." : "It stays focused on the question.",
-    ],
-    improvements: [
-      hasNumbers ? "Connect the metric more explicitly to your personal contribution." : "Add a measurable result or quantitative impact.",
-      wordCount >= 80 ? "Tighten the ending into a concise takeaway." : "Expand the situation, your role, action, and result.",
-    ],
-  };
-}
-
-function generateFollowUpQuestion(answer: string) {
-  const trimmed = answer.trim();
-  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
-  const hasNumbers = /\d|percent|%|users|requests|seconds|minutes|hours|revenue|cost|latency|명|개|%|건|시간|분|초|원/i.test(trimmed);
-  const hasChallenge = /challenge|difficult|hard|blocked|issue|risk|conflict|trade-?off|problem|어려움|문제|도전|갈등|힘들었|막혔/i.test(trimmed);
-
-  if (wordCount < 45) {
-    return "Can you explain the situation, your specific role, the actions you took, and the final result in more detail?";
-  }
-  if (!hasNumbers) {
-    return "What measurable outcome or quantitative impact can you add to prove the result of your work?";
-  }
-  if (!hasChallenge) {
-    return "What was the hardest part of this experience, and how did you work through it?";
-  }
-  return "If you had to make the same technical or product decision again, what would you change and why?";
-}
+const copy = {
+  ko: {
+    eyebrow: "면접 시뮬레이터",
+    title: "실전 면접 세션을 연습하세요",
+    description: "질문, 답변, API 기반 평가, 후속 질문, 세션 요약으로 이어지는 구조화된 면접 루프입니다.",
+    dashboard: "대시보드",
+    reset: "세션 초기화",
+    livePractice: "실시간 연습",
+    notStarted: "미시작",
+    ready: "면접 준비 양호",
+    nearly: "거의 준비됨",
+    needs: "연습 필요",
+    heroTitle: "압박감을 시뮬레이션하고 답변의 신호를 선명하게 만드세요.",
+    heroBody: "평가는 서버 API를 통해 진행되며, 답변의 구조, 근거, 기술 깊이, 임팩트를 현실적으로 점검합니다.",
+    sessionScore: "세션 점수",
+    answered: "답변 수",
+    currentQuestion: "현재 질문",
+    rubric: "평가 기준",
+    phase: "단계",
+    questionBank: "질문 은행",
+    mode: "평가 방식",
+    modeValue: "API 기반 평가",
+    differentQuestion: "다른 질문",
+    answerWorkspace: "답변 작성",
+    answerWorkspaceDesc: "답변을 작성하고 평가한 뒤 후속 질문으로 이어가세요.",
+    yourAnswer: "내 답변",
+    placeholder: "상황, 내 역할, 행동, 결과, 정량적 임팩트를 포함해 작성하세요.",
+    evaluate: "답변 평가",
+    evaluating: "평가 중...",
+    answerFollowup: "후속 질문 답하기",
+    evaluation: "평가 결과",
+    evaluationDesc: "답변 내용 기반의 구조화 평가입니다.",
+    emptyEval: "답변을 작성하고 평가하면 점수, 강점, 개선점이 표시됩니다.",
+    score: "점수",
+    strengths: "강점: ",
+    improve: "개선: ",
+    followup: "후속 질문",
+    nextStep: "다음 단계",
+    analytics: "세션 분석",
+    analyticsDesc: "현재 면접 세션의 요약 신호입니다.",
+    history: "최근 답변 히스토리",
+    historyDesc: "이번 세션에서 평가한 최근 3개 답변입니다.",
+    noHistory: "아직 평가된 답변이 없습니다. 첫 질문으로 세션을 시작하세요.",
+    previous: "평가 후 이전 질문과 점수가 여기에 표시됩니다.",
+    latest: "최근",
+    average: "평균",
+    evaluatedResponses: "평가된 답변",
+    strongestHigh: "근거와 구조가 강합니다",
+    strongestMid: "기본기는 좋고 임팩트 보강이 필요합니다",
+    strongestLow: "더 많은 연습이 필요합니다",
+    error: "평가를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    phases: {
+      intro: "소개",
+      behavioral: "행동",
+      technical: "기술",
+      followup: "후속",
+      summary: "요약",
+    },
+    phaseDesc: {
+      intro: "넓은 질문으로 시작해 맥락을 잡습니다.",
+      behavioral: "오너십, 판단력, 커뮤니케이션을 보여주세요.",
+      technical: "트레이드오프, 시스템 사고, 디버깅 깊이를 설명하세요.",
+      followup: "근거, 제약, 회고를 더 깊게 확인합니다.",
+      summary: "세션 신호를 검토하고 다음 개선점을 정합니다.",
+    },
+    statuses: {
+      live: "진행 중",
+      completed: "완료",
+      queued: "대기",
+    },
+  },
+  en: {
+    eyebrow: "Interview Simulator",
+    title: "Practice a realistic interview session flow.",
+    description: "Move from question to answer, API-based evaluation, follow-up, and session summary.",
+    dashboard: "Dashboard",
+    reset: "Reset session",
+    livePractice: "Live practice",
+    notStarted: "Not started",
+    ready: "Interview-ready",
+    nearly: "Nearly ready",
+    needs: "Needs practice",
+    heroTitle: "Simulate the pressure, sharpen the signal.",
+    heroBody: "Evaluation runs through the server API and reviews structure, evidence, technical depth, and impact realistically.",
+    sessionScore: "Session score",
+    answered: "Answered",
+    currentQuestion: "Current question",
+    rubric: "Rubric",
+    phase: "Phase",
+    questionBank: "Question bank",
+    mode: "Mode",
+    modeValue: "API evaluation",
+    differentQuestion: "Different question",
+    answerWorkspace: "Answer workspace",
+    answerWorkspaceDesc: "Draft your response, evaluate it, then continue into the follow-up.",
+    yourAnswer: "Your answer",
+    placeholder: "Use situation, role, action, result, and measurable impact.",
+    evaluate: "Evaluate answer",
+    evaluating: "Evaluating...",
+    answerFollowup: "Answer follow-up",
+    evaluation: "Evaluation",
+    evaluationDesc: "Structured feedback based on your actual answer.",
+    emptyEval: "Write an answer and evaluate it to see score, strengths, and improvement points.",
+    score: "Score",
+    strengths: "Strengths: ",
+    improve: "Improve: ",
+    followup: "Follow-up question",
+    nextStep: "Next step",
+    analytics: "Session analytics",
+    analyticsDesc: "Compact signals for the current interview run.",
+    history: "Recent answer history",
+    historyDesc: "Latest 3 evaluated answers in this session.",
+    noHistory: "No answers evaluated yet. Start with the first question to build a session summary.",
+    previous: "Previous questions and scores will appear here after evaluation.",
+    latest: "Latest",
+    average: "Average",
+    evaluatedResponses: "Evaluated responses",
+    strongestHigh: "Strong evidence and structured delivery",
+    strongestMid: "Good baseline, keep sharpening impact",
+    strongestLow: "Needs more practice",
+    error: "Could not complete evaluation. Please try again.",
+    phases: {
+      intro: "Intro",
+      behavioral: "Behavioral",
+      technical: "Technical",
+      followup: "Follow-up",
+      summary: "Summary",
+    },
+    phaseDesc: {
+      intro: "Start with a broad question and establish context.",
+      behavioral: "Show ownership, judgment, and communication.",
+      technical: "Explain trade-offs, systems thinking, and debugging depth.",
+      followup: "Go deeper on evidence, constraints, and reflection.",
+      summary: "Review the session signal and decide what to improve next.",
+    },
+    statuses: {
+      live: "Live phase",
+      completed: "Completed",
+      queued: "Queued",
+    },
+  },
+};
 
 function shorten(text: string, maxLength = 96) {
   return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 }
 
-function answerDimensions(result: EvaluationResult | null) {
-  const score = result?.score ?? 0;
+function answerDimensions(result: EvaluationResult | null, isEn: boolean) {
+  const category = result?.categoryScores ?? {};
   return [
-    { label: "Structure", value: Math.min(96, score + 6) },
-    { label: "Evidence", value: Math.max(24, score - 8) },
-    { label: "Impact", value: Math.max(18, score - 14) },
-    { label: "Clarity", value: Math.min(92, score + 2) },
+    { label: isEn ? "Problem solving" : "문제 해결", value: category.problemSolving ?? result?.score ?? 0 },
+    { label: isEn ? "Technical depth" : "기술 깊이", value: category.technicalDepth ?? result?.score ?? 0 },
+    { label: isEn ? "Communication" : "커뮤니케이션", value: category.communication ?? result?.score ?? 0 },
+    { label: isEn ? "Impact" : "임팩트", value: category.impact ?? result?.score ?? 0 },
   ];
 }
 
-function getReadinessStatus(score: number, answered: number, isEn: boolean) {
-  if (answered === 0) return { label: isEn ? "Not started" : "미시작", className: "border-[var(--line)] bg-[var(--surface)] text-[var(--muted-strong)]" };
-  if (score >= 82) return { label: isEn ? "Interview-ready" : "면접 준비 완료", className: "border-[color-mix(in_srgb,var(--success)_42%,var(--line))] bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--foreground)]" };
-  if (score >= 68) return { label: isEn ? "Nearly ready" : "거의 준비됨", className: "border-[color-mix(in_srgb,var(--accent-2)_42%,var(--line))] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] text-[var(--foreground)]" };
-  return { label: isEn ? "Needs practice" : "연습 필요", className: "border-[color-mix(in_srgb,var(--warning)_42%,var(--line))] bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-[var(--foreground)]" };
+function getReadinessStatus(score: number, answered: number, text: typeof copy.ko | typeof copy.en) {
+  if (answered === 0) return { label: text.notStarted, className: "border-[var(--line)] bg-[var(--surface)] text-[var(--muted-strong)]" };
+  if (score >= 82) return { label: text.ready, className: "border-[color-mix(in_srgb,var(--success)_42%,var(--line))] bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--foreground)]" };
+  if (score >= 68) return { label: text.nearly, className: "border-[color-mix(in_srgb,var(--accent-2)_42%,var(--line))] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] text-[var(--foreground)]" };
+  return { label: text.needs, className: "border-[color-mix(in_srgb,var(--warning)_42%,var(--line))] bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-[var(--foreground)]" };
 }
 
 export default function SimulatorPage() {
   const { language } = useLanguage();
   const isEn = language === "en";
-  const t = useCallback((ko: string, en: string) => (isEn ? en : ko), [isEn]);
-
-  const phaseLabel: Record<InterviewPhase, string> = useMemo(() => ({
-    intro: t("소개", "Intro"),
-    behavioral: t("행동", "Behavioral"),
-    technical: t("기술", "Technical"),
-    followup: t("심화", "Follow-up"),
-    summary: t("요약", "Summary"),
-  }), [t]);
-
-  const phaseDescription: Record<InterviewPhase, string> = useMemo(() => ({
-    intro: t("큰 질문으로 시작해 맥락을 잡습니다.", "Start with a broad question and establish context."),
-    behavioral: t("오너십, 판단력, 커뮤니케이션을 보여주세요.", "Show ownership, judgment, and communication."),
-    technical: t("트레이드오프, 시스템 사고, 디버깅 깊이를 설명하세요.", "Explain trade-offs, systems thinking, and debugging depth."),
-    followup: t("증거, 제약, 회고를 심화합니다.", "Go deeper on evidence, constraints, and reflection."),
-    summary: t("세션 신호를 검토하고 다음 개선점을 결정하세요.", "Review the session signal and decide what to improve next."),
-  }), [t]);
-
+  const t = copy[language];
   const phaseFlow: InterviewPhase[] = ["intro", "behavioral", "technical", "followup", "summary"];
 
   const [questionIndex, setQuestionIndex] = useState(0);
   const [phase, setPhase] = useState<InterviewPhase>("intro");
-  const [currentQuestion, setCurrentQuestion] = useState(interviewQuestions[0].question);
-  const [currentRubric, setCurrentRubric] = useState(interviewQuestions[0].rubric);
+  const [currentQuestion, setCurrentQuestion] = useState(isEn ? interviewQuestions[0].questionEn : interviewQuestions[0].questionKo);
+  const [currentRubric, setCurrentRubric] = useState(isEn ? interviewQuestions[0].rubricEn : interviewQuestions[0].rubricKo);
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [followUpQuestion, setFollowUpQuestion] = useState("");
   const [lastEvaluatedKey, setLastEvaluatedKey] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const sessionStats = useMemo(() => {
     const totalAnswered = history.length;
@@ -160,42 +258,74 @@ export default function SimulatorPage() {
       ? Math.round(history.reduce((sum, item) => sum + item.result.score, 0) / totalAnswered)
       : 0;
 
-    const readiness = getReadinessStatus(averageScore, totalAnswered, isEn);
+    const readiness = getReadinessStatus(averageScore, totalAnswered, t);
     const strongestArea =
-      averageScore >= 80
-        ? t("강한 증거와 구조적 전달", "Strong evidence and structured delivery")
-        : averageScore >= 65
-          ? t("기본기 양호, 임팩트 보강 중", "Good baseline, keep sharpening impact")
-          : t("연습이 더 필요합니다", "Needs more practice");
+      averageScore >= 80 ? t.strongestHigh : averageScore >= 65 ? t.strongestMid : t.strongestLow;
 
     return { totalAnswered, latestScore, averageScore, strongestArea, readiness };
-  }, [history, isEn, t]);
+  }, [history, t]);
 
   const progressWidth = history.length > 0 ? Math.max(8, Math.min(100, sessionStats.averageScore)) : 0;
 
-  const evaluate = () => {
+  const evaluate = async () => {
     const trimmed = answer.trim();
-    if (!trimmed) return;
+    if (!trimmed || loading) return;
 
-    const nextResult = evaluateAnswer(trimmed);
-    const nextFollowUp = generateFollowUpQuestion(trimmed);
+    setLoading(true);
+    setError("");
     const evaluationKey = `${currentQuestion}::${trimmed}`;
 
-    setResult(nextResult);
-    setFollowUpQuestion(nextFollowUp);
-    setPhase((prev) => {
-      if (prev === "followup") return "summary";
-      if (prev === "intro") return interviewQuestions[questionIndex].phase;
-      if (prev === "summary") return "behavioral";
-      return prev;
-    });
+    try {
+      const response = await fetch("/api/simulator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "evaluate",
+          question: currentQuestion,
+          answer: trimmed,
+          targetRole: isEn ? "Software Engineer" : "소프트웨어 엔지니어",
+          rubric: currentRubric,
+          language,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || t.error);
 
-    if (evaluationKey !== lastEvaluatedKey) {
-      setHistory((prev) => [
-        { question: currentQuestion, answer: trimmed, result: nextResult, timestamp: new Date().toISOString() },
-        ...prev,
-      ]);
-      setLastEvaluatedKey(evaluationKey);
+      const nextResult: EvaluationResult = {
+        score: data.score,
+        summary: data.summary,
+        strengths: Array.isArray(data.strengths) ? data.strengths : [],
+        improvements: Array.isArray(data.improvements) ? data.improvements : [],
+        categoryScores: data.categoryScores,
+        hiringSignal: data.hiringSignal,
+        nextStepAdvice: Array.isArray(data.nextStepAdvice) ? data.nextStepAdvice : [],
+      };
+      const nextFollowUp =
+        nextResult.nextStepAdvice?.[0] ??
+        (isEn
+          ? "What measurable outcome can you add to make this answer more credible?"
+          : "이 답변을 더 신뢰감 있게 만들기 위해 어떤 정량 결과를 추가할 수 있나요?");
+
+      setResult(nextResult);
+      setFollowUpQuestion(nextFollowUp);
+      setPhase((prev) => {
+        if (prev === "followup") return "summary";
+        if (prev === "intro") return interviewQuestions[questionIndex].phase;
+        if (prev === "summary") return "behavioral";
+        return prev;
+      });
+
+      if (evaluationKey !== lastEvaluatedKey) {
+        setHistory((prev) => [
+          { question: currentQuestion, answer: trimmed, result: nextResult, timestamp: new Date().toISOString() },
+          ...prev,
+        ]);
+        setLastEvaluatedKey(evaluationKey);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -204,58 +334,54 @@ export default function SimulatorPage() {
       phase === "behavioral" ? "technical" : phase === "technical" ? "behavioral" : "behavioral";
     const candidates = interviewQuestions.filter((q) => q.phase === nextPhase);
     const nextQuestion = candidates[(questionIndex + 1) % candidates.length];
-    const globalIndex = interviewQuestions.findIndex((q) => q.question === nextQuestion.question);
+    const globalIndex = interviewQuestions.findIndex((q) => q.questionEn === nextQuestion.questionEn);
 
     setQuestionIndex(globalIndex >= 0 ? globalIndex : 0);
     setPhase(nextPhase);
-    setCurrentQuestion(nextQuestion.question);
-    setCurrentRubric(nextQuestion.rubric);
+    setCurrentQuestion(isEn ? nextQuestion.questionEn : nextQuestion.questionKo);
+    setCurrentRubric(isEn ? nextQuestion.rubricEn : nextQuestion.rubricKo);
     setAnswer("");
     setResult(null);
     setFollowUpQuestion("");
     setLastEvaluatedKey("");
+    setError("");
   };
 
   const answerFollowUp = () => {
     if (!followUpQuestion) return;
     setCurrentQuestion(followUpQuestion);
-    setCurrentRubric([t("구체성", "Specificity"), t("증거", "Evidence"), t("회고", "Reflection"), t("다음 행동", "Next action")]);
+    setCurrentRubric(isEn ? ["Specificity", "Evidence", "Reflection", "Next action"] : ["구체성", "근거", "회고", "다음 행동"]);
     setPhase("followup");
     setAnswer("");
     setResult(null);
     setFollowUpQuestion("");
     setLastEvaluatedKey("");
+    setError("");
   };
 
   const resetSession = () => {
     setQuestionIndex(0);
     setPhase("intro");
-    setCurrentQuestion(interviewQuestions[0].question);
-    setCurrentRubric(interviewQuestions[0].rubric);
+    setCurrentQuestion(isEn ? interviewQuestions[0].questionEn : interviewQuestions[0].questionKo);
+    setCurrentRubric(isEn ? interviewQuestions[0].rubricEn : interviewQuestions[0].rubricKo);
     setAnswer("");
     setResult(null);
     setHistory([]);
     setFollowUpQuestion("");
     setLastEvaluatedKey("");
+    setError("");
   };
 
   return (
     <PageShell maxWidth="max-w-7xl">
       <PageHeader
-        eyebrow={t("면접 시뮬레이터", "Interview Simulator")}
-        title={t("실전 면접 세션을 연습하세요.", "Practice a realistic interview session flow.")}
-        description={t(
-          "질문 → 답변 → 평가 → 심화 → 세션 요약으로 이어지는 구조화된 면접 루프를 경험합니다.",
-          "Move from question to answer, evaluation, follow-up, and session summary using local scoring for now.",
-        )}
+        eyebrow={t.eyebrow}
+        title={t.title}
+        description={t.description}
         actions={
           <>
-            <Link href="/dashboard" className="secondary-btn px-4 py-2 text-sm">
-              {t("대시보드", "Dashboard")}
-            </Link>
-            <button type="button" onClick={resetSession} className="secondary-btn px-4 py-2 text-sm">
-              {t("세션 초기화", "Reset session")}
-            </button>
+            <Link href="/dashboard" className="secondary-btn px-4 py-2 text-sm">{t.dashboard}</Link>
+            <button type="button" onClick={resetSession} className="secondary-btn px-4 py-2 text-sm">{t.reset}</button>
           </>
         }
       />
@@ -271,8 +397,8 @@ export default function SimulatorPage() {
                 <div className="flex items-center gap-3">
                   <span className="path-dot">{isComplete ? "✓" : index + 1}</span>
                   <div>
-                    <p className="text-sm font-semibold text-[var(--foreground)]">{phaseLabel[item]}</p>
-                    <p className="text-xs text-[var(--muted)]">{isActive ? t("진행 중", "Live phase") : isComplete ? t("완료", "Completed") : t("대기", "Queued")}</p>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{t.phases[item]}</p>
+                    <p className="text-xs text-[var(--muted)]">{isActive ? t.statuses.live : isComplete ? t.statuses.completed : t.statuses.queued}</p>
                   </div>
                 </div>
               </div>
@@ -285,31 +411,20 @@ export default function SimulatorPage() {
         <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr] lg:items-end">
           <div>
             <div className="flex flex-wrap gap-2">
-              <span className="accent-pill px-3 py-1 text-xs font-medium backdrop-blur">
-                {t("라이브 연습", "Live practice")}
-              </span>
-              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sessionStats.readiness.className}`}>
-                {sessionStats.readiness.label}
-              </span>
+              <span className="accent-pill px-3 py-1 text-xs font-medium backdrop-blur">{t.livePractice}</span>
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sessionStats.readiness.className}`}>{sessionStats.readiness.label}</span>
             </div>
-            <h2 className="mt-4 max-w-3xl text-3xl font-semibold leading-tight sm:text-4xl">
-              {t("압박을 시뮬레이션하고, 신호를 날카롭게 만드세요.", "Simulate the pressure, sharpen the signal.")}
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">
-              {t(
-                "페이즈 추적, 규칙 기반 심화 질문, 세션 분석을 통해 답변이 얼마나 구체화되고 있는지 확인하세요.",
-                "Work through a structured interview loop with phase tracking, rule-based follow-ups, and session analytics that show whether your answers are becoming more concrete.",
-              )}
-            </p>
+            <h2 className="mt-4 max-w-3xl text-3xl font-semibold leading-tight sm:text-4xl">{t.heroTitle}</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">{t.heroBody}</p>
           </div>
           <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 backdrop-blur">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--muted)]">{t("세션 점수", "Session score")}</p>
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--muted)]">{t.sessionScore}</p>
                 <p className="mt-2 text-4xl font-semibold">{history.length > 0 ? `${sessionStats.averageScore}%` : "--"}</p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-[var(--muted)]">{t("답변 수", "Answered")}</p>
+                <p className="text-xs text-[var(--muted)]">{t.answered}</p>
                 <p className="mt-1 text-2xl font-semibold">{sessionStats.totalAnswered}</p>
               </div>
             </div>
@@ -322,11 +437,11 @@ export default function SimulatorPage() {
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
-        <PagePanel className="overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur">
+        <PagePanel>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <SectionTitle title={t("현재 질문", "Current question")} description={phaseDescription[phase]} />
+            <SectionTitle title={t.currentQuestion} description={t.phaseDesc[phase]} />
             <span className="inline-flex w-fit rounded-full border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-3 py-1 text-xs font-medium text-[var(--accent-2)]">
-              {phaseLabel[phase]}
+              {t.phases[phase]}
             </span>
           </div>
 
@@ -335,46 +450,31 @@ export default function SimulatorPage() {
           </div>
 
           <div className="mt-5">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--muted)]">{t("평가 기준", "Rubric")}</p>
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--muted)]">{t.rubric}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {currentRubric.map((item) => (
-                <span key={item} className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted-strong)]">
-                  {item}
-                </span>
+                <span key={item} className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted-strong)]">{item}</span>
               ))}
             </div>
           </div>
 
           <div className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted-strong)] sm:grid-cols-3">
-            <div>
-              <p className="font-medium text-[var(--foreground)]">{t("페이즈", "Phase")}</p>
-              <p className="mt-1">{phaseLabel[phase]}</p>
-            </div>
-            <div>
-              <p className="font-medium text-[var(--foreground)]">{t("질문 수", "Question bank")}</p>
-              <p className="mt-1">{interviewQuestions.length} {t("개", "prompts")}</p>
-            </div>
-            <div>
-              <p className="font-medium text-[var(--foreground)]">{t("모드", "Mode")}</p>
-              <p className="mt-1">{t("로컬 채점", "Local scoring")}</p>
-            </div>
+            <div><p className="font-medium text-[var(--foreground)]">{t.phase}</p><p className="mt-1">{t.phases[phase]}</p></div>
+            <div><p className="font-medium text-[var(--foreground)]">{t.questionBank}</p><p className="mt-1">{interviewQuestions.length} prompts</p></div>
+            <div><p className="font-medium text-[var(--foreground)]">{t.mode}</p><p className="mt-1">{t.modeValue}</p></div>
           </div>
 
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={moveToDifferentQuestion} className="secondary-btn px-4 py-2 text-sm">
-              {t("다른 질문", "Different question")}
-            </button>
-            <button type="button" onClick={resetSession} className="secondary-btn px-4 py-2 text-sm">
-              {t("세션 초기화", "Reset session")}
-            </button>
+            <button type="button" onClick={moveToDifferentQuestion} className="secondary-btn px-4 py-2 text-sm">{t.differentQuestion}</button>
+            <button type="button" onClick={resetSession} className="secondary-btn px-4 py-2 text-sm">{t.reset}</button>
           </div>
         </PagePanel>
 
-        <PagePanel className="border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur">
-          <SectionTitle title={t("답변 작성", "Answer workspace")} description={t("답변을 작성하고 평가한 후 심화 질문으로 이어가세요.", "Draft your response, evaluate it, then continue into the follow-up.")} />
+        <PagePanel>
+          <SectionTitle title={t.answerWorkspace} description={t.answerWorkspaceDesc} />
 
           <label className="mt-5 block">
-            <span className="mb-2 block text-sm font-medium text-[var(--foreground)]">{t("내 답변", "Your answer")}</span>
+            <span className="mb-2 block text-sm font-medium text-[var(--foreground)]">{t.yourAnswer}</span>
             <textarea
               value={answer}
               onChange={(event) => {
@@ -385,54 +485,43 @@ export default function SimulatorPage() {
                 }
               }}
               className="field min-h-64 resize-y"
-              placeholder={t("상황, 역할, 행동, 결과, 정량적 임팩트를 포함해 작성하세요.", "Use situation, role, action, result, and measurable impact.")}
+              placeholder={t.placeholder}
             />
           </label>
 
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={evaluate} className="primary-btn px-4 py-2 text-sm" disabled={!answer.trim()}>
-              {t("답변 평가", "Evaluate answer")}
+            <button type="button" onClick={evaluate} className="primary-btn px-4 py-2 text-sm disabled:opacity-60" disabled={!answer.trim() || loading}>
+              {loading ? t.evaluating : t.evaluate}
             </button>
-            {followUpQuestion ? (
-              <button type="button" onClick={answerFollowUp} className="secondary-btn px-4 py-2 text-sm">
-                {t("심화 질문 답하기", "Answer follow-up")}
-              </button>
-            ) : null}
+            {followUpQuestion ? <button type="button" onClick={answerFollowUp} className="secondary-btn px-4 py-2 text-sm">{t.answerFollowup}</button> : null}
           </div>
+          {error ? <Notice tone="warning" className="mt-4">{error}</Notice> : null}
 
           <div className="mt-6">
-            <SectionTitle title={t("평가 결과", "Evaluation")} description={t("구조, 구체성, 임팩트 기반 로컬 신호입니다.", "A quick local signal based on structure, specificity, and impact.")} />
+            <SectionTitle title={t.evaluation} description={t.evaluationDesc} />
             {result ? (
               <div className="mt-4 grid gap-4 xl:grid-cols-[0.36fr_0.64fr]">
-                <MetricTile label={t("점수", "Score")} value={`${result.score}%`} helper={result.summary} />
+                <MetricTile label={t.score} value={`${result.score}%`} helper={result.summary} />
                 <div className="space-y-3">
-                  <Notice tone="success">
-                    <strong>{t("강점: ", "Strengths: ")}</strong>
-                    {result.strengths.join(" ")}
-                  </Notice>
-                  <Notice tone="warning">
-                    <strong>{t("개선: ", "Improve: ")}</strong>
-                    {result.improvements.join(" ")}
-                  </Notice>
+                  <Notice tone="success"><strong>{t.strengths}</strong>{result.strengths.join(" ")}</Notice>
+                  <Notice tone="warning"><strong>{t.improve}</strong>{result.improvements.join(" ")}</Notice>
                 </div>
                 <div className="xl:col-span-2">
                   <div className="content-card grid gap-3 p-4 sm:grid-cols-2">
-                    {answerDimensions(result).map((dimension) => (
+                    {answerDimensions(result, isEn).map((dimension) => (
                       <div key={dimension.label}>
                         <div className="mb-2 flex justify-between text-xs font-semibold text-[var(--muted)]">
                           <span>{dimension.label}</span>
                           <span>{dimension.value}%</span>
                         </div>
-                        <div className="signal-bar">
-                          <div className="signal-fill" style={{ width: `${dimension.value}%` }} />
-                        </div>
+                        <div className="signal-bar"><div className="signal-fill" style={{ width: `${dimension.value}%` }} /></div>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
             ) : (
-              <EmptyState>{t("답변을 작성하고 평가하면 점수, 강점, 개선점이 표시됩니다.", "Write an answer and evaluate it to see score, strengths, and improvement points.")}</EmptyState>
+              <EmptyState>{t.emptyEval}</EmptyState>
             )}
           </div>
 
@@ -440,12 +529,10 @@ export default function SimulatorPage() {
             <div className="mt-5 rounded-2xl border border-[var(--line)] bg-gradient-to-br from-[color-mix(in_srgb,var(--accent)_14%,transparent)] to-[var(--surface)] p-4 shadow-[0_12px_30px_rgba(10,102,194,0.08)]">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.06em] text-[var(--accent-2)]">{t("심화 질문", "Follow-up question")}</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.06em] text-[var(--accent-2)]">{t.followup}</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{followUpQuestion}</p>
                 </div>
-                <span className="w-fit rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--accent-2)]">
-                  {t("다음 단계", "Next step")}
-                </span>
+                <span className="w-fit rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--accent-2)]">{t.nextStep}</span>
               </div>
             </div>
           ) : null}
@@ -453,38 +540,32 @@ export default function SimulatorPage() {
       </section>
 
       <section className="mt-5 grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
-        <PagePanel className="border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
+        <PagePanel>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <SectionTitle title={t("세션 분석", "Session analytics")} description={t("현재 면접 세션의 요약 신호입니다.", "Compact signals for the current interview run.")} />
-            <span className={`w-fit rounded-full border px-3 py-1 text-xs font-medium ${sessionStats.readiness.className}`}>
-              {sessionStats.readiness.label}
-            </span>
+            <SectionTitle title={t.analytics} description={t.analyticsDesc} />
+            <span className={`w-fit rounded-full border px-3 py-1 text-xs font-medium ${sessionStats.readiness.className}`}>{sessionStats.readiness.label}</span>
           </div>
 
           {history.length > 0 ? (
             <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <MetricTile label={t("답변 수", "Answered")} value={sessionStats.totalAnswered} helper={t("평가된 답변", "Evaluated responses")} />
-              <MetricTile label={t("평균", "Average")} value={`${sessionStats.averageScore}%`} helper={sessionStats.strongestArea} />
-              <MetricTile label={t("최근", "Latest")} value={`${sessionStats.latestScore}%`} helper={t("가장 최근 점수", "Most recent score")} />
+              <MetricTile label={t.answered} value={sessionStats.totalAnswered} helper={t.evaluatedResponses} />
+              <MetricTile label={t.average} value={`${sessionStats.averageScore}%`} helper={sessionStats.strongestArea} />
+              <MetricTile label={t.latest} value={`${sessionStats.latestScore}%`} helper={t.latest} />
             </div>
           ) : (
-            <EmptyState>{t("아직 평가된 답변이 없습니다. 첫 번째 질문으로 세션을 시작하세요.", "No answers evaluated yet. Start with the first question to build a session summary.")}</EmptyState>
+            <EmptyState>{t.noHistory}</EmptyState>
           )}
         </PagePanel>
 
-        <PagePanel className="border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
-          <SectionTitle title={t("최근 답변 히스토리", "Recent answer history")} description={t("이번 세션에서 평가된 최근 3개 답변입니다.", "Latest 3 evaluated answers in this session.")} />
+        <PagePanel>
+          <SectionTitle title={t.history} description={t.historyDesc} />
           {history.length > 0 ? (
             <div className="mt-5 grid gap-3 md:grid-cols-3">
               {history.slice(0, 3).map((item, index) => (
                 <article key={`${item.timestamp}-${item.result.score}`} className="rounded-2xl border border-[var(--line)] bg-gradient-to-br from-[var(--surface-strong)] to-[var(--surface)] p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs font-medium text-[var(--muted)]">
-                      #{history.length - index}
-                    </span>
-                    <span className="shrink-0 rounded-full border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-2 py-1 text-xs font-medium text-[var(--accent-2)]">
-                      {item.result.score}%
-                    </span>
+                    <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs font-medium text-[var(--muted)]">#{history.length - index}</span>
+                    <span className="shrink-0 rounded-full border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-2 py-1 text-xs font-medium text-[var(--accent-2)]">{item.result.score}%</span>
                   </div>
                   <p className="mt-3 text-sm font-medium leading-6 text-[var(--foreground)]">{shorten(item.question, 84)}</p>
                   <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{new Date(item.timestamp).toLocaleString(isEn ? "en-US" : "ko-KR")}</p>
@@ -492,7 +573,7 @@ export default function SimulatorPage() {
               ))}
             </div>
           ) : (
-            <EmptyState>{t("평가 후 이전 질문과 점수가 여기 표시됩니다.", "Previous questions and scores will appear here after evaluation.")}</EmptyState>
+            <EmptyState>{t.previous}</EmptyState>
           )}
         </PagePanel>
       </section>

@@ -3,6 +3,8 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { BriefcaseBusiness, ScanSearch, Swords } from "lucide-react";
+import { PremiumFeatureCard } from "@/components/premium-feature-card";
 import { MetricTile, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
@@ -12,6 +14,8 @@ type InsightResponse = {
   topPercent: number;
   completeness: number;
   trend: number[];
+  recommendedRoles: string[];
+  recommendedRoleSource: "openai" | "profile_fallback";
   signals: string[];
   weeklyReport: string[];
 };
@@ -21,6 +25,42 @@ const workflow = [
   { href: "/matching", labelKo: "Match", labelEn: "Match", titleKo: "경로 선택", titleEn: "Route choice" },
   { href: "/simulator", labelKo: "Practice", labelEn: "Practice", titleKo: "면접 훈련", titleEn: "Interview drill" },
   { href: "/cover-letter", labelKo: "Apply", labelEn: "Apply", titleKo: "지원 문서", titleEn: "Application docs" },
+];
+
+const premiumFeatures = [
+  {
+    href: "/interview/hiring-manager",
+    titleKo: "취업 시뮬레이터",
+    titleEn: "Hiring Manager Simulator",
+    descriptionKo: "회사 스타일별 평가 관점으로 답변을 점검하고 다음 연습 질문을 받아보세요.",
+    descriptionEn: "Practice with company-style evaluation lenses and structured answer feedback.",
+    badge: "Premium" as const,
+    ctaKo: "시뮬레이터 열기",
+    ctaEn: "Open simulator",
+    icon: BriefcaseBusiness,
+  },
+  {
+    href: "/career-chess",
+    titleKo: "Career Chess",
+    titleEn: "Career Chess",
+    descriptionKo: "빅테크, 스타트업, 대학원 경로를 한 번에 분석하고 선택 경로를 비교하세요.",
+    descriptionEn: "Analyze big-tech, startup, and graduate-school paths in one strategic run.",
+    badge: "New" as const,
+    ctaKo: "경로 분석",
+    ctaEn: "Simulate paths",
+    icon: Swords,
+  },
+  {
+    href: "/background-check",
+    titleKo: "Background Check Preview",
+    titleEn: "Background Check Preview",
+    descriptionKo: "직접 제공한 공개 프로필 내용에서 위험 신호, 강점, 정리 체크리스트를 확인하세요.",
+    descriptionEn: "Review risks, strengths, and cleanup tasks from only the public content you provide.",
+    badge: "Premium" as const,
+    ctaKo: "리포트 보기",
+    ctaEn: "Preview report",
+    icon: ScanSearch,
+  },
 ];
 
 export default function DashboardPage() {
@@ -46,7 +86,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const res = await fetch("/api/dashboard-insight", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/dashboard-insight?language=${language}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = await res.json();
       setLoading(false);
 
@@ -60,7 +100,7 @@ export default function DashboardPage() {
     };
 
     void load();
-  }, [isEn]);
+  }, [isEn, language]);
 
   useEffect(() => {
     if (!insight) return;
@@ -125,6 +165,32 @@ export default function DashboardPage() {
                 <MetricTile label="Route" value={`${readiness}%`} helper={isEn ? "Decision confidence" : "결정 신뢰도"} />
                 <MetricTile label="Rank" value={`Top ${animatedPercent}%`} helper={isEn ? "Relative readiness" : "상대 준비도"} />
               </div>
+              <div className="content-card mt-5 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{isEn ? "AI-Recommended Roles" : "AI 추천 직종"}</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                      {insight.recommendedRoleSource === "openai"
+                        ? isEn ? "Generated from your profile and recent application context." : "프로필과 최근 지원서 맥락을 기반으로 생성했습니다."
+                        : isEn ? "Estimated from your profile because AI generation was unavailable." : "AI 생성이 불가해 프로필 기반으로 추정했습니다."}
+                    </p>
+                  </div>
+                  <span className="accent-pill w-fit px-3 py-1 text-xs font-semibold">
+                    {insight.recommendedRoleSource === "openai" ? "AI" : isEn ? "Profile" : "프로필"}
+                  </span>
+                </div>
+                {insight.recommendedRoles.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {insight.recommendedRoles.map((role) => (
+                      <span key={role} className="chip">{role}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
+                    {isEn ? "Add a target role and skills in Profile to receive recommendations." : "프로필에 희망 직무와 기술스택을 입력하면 추천 직종이 표시됩니다."}
+                  </p>
+                )}
+              </div>
               <div className="mt-5 space-y-3">
                 {[
                   [isEn ? "Profile completeness" : "프로필 완성도", insight.completeness, "var(--accent-2)"],
@@ -155,6 +221,28 @@ export default function DashboardPage() {
                     <p className="mt-4 text-sm font-semibold text-[var(--foreground)]">{isEn ? step.labelEn : step.labelKo}</p>
                     <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{isEn ? step.titleEn : step.titleKo}</p>
                   </Link>
+                ))}
+              </div>
+            </PagePanel>
+          </section>
+
+          <section className="mt-5">
+            <PagePanel>
+              <SectionTitle
+                title={isEn ? "Premium Career Labs" : "프리미엄 커리어 랩"}
+                description={isEn ? "New evaluation tools for interview, strategy, and recruiter-readiness practice." : "면접, 커리어 전략, 채용 담당자 관점 점검을 위한 새로운 평가 도구입니다."}
+              />
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                {premiumFeatures.map((feature) => (
+                  <PremiumFeatureCard
+                    key={feature.href}
+                    href={feature.href}
+                    title={isEn ? feature.titleEn : feature.titleKo}
+                    description={isEn ? feature.descriptionEn : feature.descriptionKo}
+                    badge={feature.badge}
+                    cta={isEn ? feature.ctaEn : feature.ctaKo}
+                    icon={feature.icon}
+                  />
                 ))}
               </div>
             </PagePanel>

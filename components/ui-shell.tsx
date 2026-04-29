@@ -135,6 +135,9 @@ const navSteps = [
   { labelKo: "매칭", labelEn: "Match", href: "/matching", icon: "02" },
   { labelKo: "면접 연습", labelEn: "Drill", href: "/simulator", icon: "03" },
   { labelKo: "지원서", labelEn: "Apply", href: "/cover-letter", icon: "04" },
+  { labelKo: "취업 시뮬레이터", labelEn: "Hiring Simulator", href: "/interview/hiring-manager", icon: "05" },
+  { labelKo: "체스", labelEn: "Chess", href: "/career-chess", icon: "06" },
+  { labelKo: "체크", labelEn: "Check", href: "/background-check", icon: "07" },
 ];
 
 function CockpitRail() {

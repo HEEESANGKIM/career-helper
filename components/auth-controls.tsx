@@ -13,6 +13,9 @@ const appNav = [
   { href: "/matching", labelKo: "매칭", labelEn: "Match" },
   { href: "/simulator", labelKo: "면접 연습", labelEn: "Drill" },
   { href: "/cover-letter", labelKo: "지원서", labelEn: "Write" },
+  { href: "/interview/hiring-manager", labelKo: "취업 시뮬레이터", labelEn: "Hiring Simulator" },
+  { href: "/career-chess", labelKo: "체스", labelEn: "Chess" },
+  { href: "/background-check", labelKo: "체크", labelEn: "Check" },
   { href: "/profile", labelKo: "프로필", labelEn: "Profile" },
 ];
 
@@ -25,14 +28,11 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
   useEffect(() => {
     if (!supabase || !isSupabaseConfigured) return;
     const client = supabase;
-
     let mounted = true;
 
     const init = async () => {
       const { data } = await client.auth.getSession();
-      if (mounted) {
-        setIsLoggedIn(Boolean(data.session));
-      }
+      if (mounted) setIsLoggedIn(Boolean(data.session));
     };
 
     void init();
@@ -65,13 +65,7 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
     return isLoggedIn ? (
       <>
         {navLinks.map((item) => (
-          <Link
-            key={item.href}
-            className={`flex w-full items-center justify-start px-3 py-2 text-left text-sm ${
-              item.active ? "accent-pill" : "secondary-btn"
-            }`}
-            href={item.href}
-          >
+          <Link key={item.href} className={`flex w-full items-center justify-start px-3 py-2 text-left text-sm ${item.active ? "accent-pill" : "secondary-btn"}`} href={item.href}>
             {item.label}
           </Link>
         ))}

@@ -1,8 +1,10 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { MetricTile, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
 
 type InsightResponse = {
@@ -14,46 +16,16 @@ type InsightResponse = {
   weeklyReport: string[];
 };
 
-type QuickActionIconName = "profile" | "matching" | "coverLetter" | "simulator";
-
-function QuickActionIcon({ name }: { name: QuickActionIconName }) {
-  const baseClass = "h-5 w-5 text-blue-700";
-
-  if (name === "profile") {
-    return (
-      <svg viewBox="0 0 24 24" className={baseClass} aria-hidden>
-        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.31 0-6 2.02-6 4.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1C18 16.02 15.31 14 12 14Z" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  if (name === "matching") {
-    return (
-      <svg viewBox="0 0 24 24" className={baseClass} aria-hidden>
-        <path d="M10 4a6 6 0 1 0 3.87 10.58l3.77 3.77a1 1 0 0 0 1.41-1.41l-3.77-3.77A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1-4 4 4 4 0 0 1 4-4Z" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  if (name === "coverLetter") {
-    return (
-      <svg viewBox="0 0 24 24" className={baseClass} aria-hidden>
-        <path d="M6 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9.5L14.5 3Zm8 1.91L18.09 9H14ZM8 12a1 1 0 1 1 0-2h8a1 1 0 1 1 0 2Zm0 4a1 1 0 1 1 0-2h8a1 1 0 1 1 0 2Z" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" className={baseClass} aria-hidden>
-      <path d="M4 5a2 2 0 0 1 2-2h4.5a2 2 0 0 1 1.8 1.12L13.4 6h4.6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Zm6.5 2H6v11h12V8h-5.2a2 2 0 0 1-1.79-1.11ZM10 11a1 1 0 0 1 1-1h1v-1a1 1 0 1 1 2 0v1h1a1 1 0 1 1 0 2h-1v1a1 1 0 1 1-2 0v-1h-1a1 1 0 0 1-1-1Z" fill="currentColor" />
-    </svg>
-  );
-}
+const workflow = [
+  { href: "/profile", labelKo: "Profile", labelEn: "Profile", titleKo: "신호 정리", titleEn: "Signal setup" },
+  { href: "/matching", labelKo: "Match", labelEn: "Match", titleKo: "경로 선택", titleEn: "Route choice" },
+  { href: "/simulator", labelKo: "Practice", labelEn: "Practice", titleKo: "면접 훈련", titleEn: "Interview drill" },
+  { href: "/cover-letter", labelKo: "Apply", labelEn: "Apply", titleKo: "지원 문서", titleEn: "Application docs" },
+];
 
 export default function DashboardPage() {
   const { language } = useLanguage();
   const isEn = language === "en";
-
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [insight, setInsight] = useState<InsightResponse | null>(null);
@@ -67,18 +39,14 @@ export default function DashboardPage() {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const session = await getSessionWithRetry();
+      const token = session?.access_token;
       if (!token) {
         window.location.href = "/login";
         return;
       }
 
-      const res = await fetch("/api/dashboard-insight", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res = await fetch("/api/dashboard-insight", { headers: { Authorization: `Bearer ${token}` } });
       const json = await res.json();
       setLoading(false);
 
@@ -109,147 +77,118 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, [insight]);
 
-  const buildTrendChart = (trend: number[]) => {
-    const values = trend.slice(0, 5).map((v) => Math.max(0, Math.min(100, v)));
-    const width = 320;
-    const height = 140;
-    const left = 20;
-    const right = 20;
-    const top = 20;
-    const bottom = 96;
-    const stepX = values.length > 1 ? (width - left - right) / (values.length - 1) : 0;
-
-    const points = values.map((v, idx) => {
-      const x = left + stepX * idx;
-      const y = bottom - ((bottom - top) * v) / 100;
-      return { x, y, value: v };
-    });
-
-    const path = points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-    const areaPath = `${path} L ${left + stepX * (values.length - 1)} ${bottom} L ${left} ${bottom} Z`;
-    return { points, path, areaPath, width, height, left, right, bottom };
-  };
+  const readiness = insight ? Math.max(0, Math.min(100, 100 - insight.topPercent)) : 0;
+  const routeStatus = useMemo(() => {
+    if (!insight) return isEn ? "Awaiting signal" : "신호 대기 중";
+    if (readiness >= 78) return isEn ? "Ready to apply" : "지원 준비 양호";
+    if (readiness >= 54) return isEn ? "Build proof" : "증거 보강 필요";
+    return isEn ? "Profile first" : "프로필 우선";
+  }, [insight, isEn, readiness]);
 
   return (
-    <div className="app-bg px-4 py-8">
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="surface-card p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Dashboard</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">{isEn ? "Career Dashboard" : "커리어 대시보드"}</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            {isEn ? "Check AI insights and your current job-prep progress based on your profile." : "프로필 기반 AI 인사이트와 취업 준비 진행률을 확인하세요."}
-          </p>
+    <PageShell maxWidth="max-w-7xl">
+      <PageHeader
+        eyebrow="Career Cockpit"
+        title={isEn ? "Your PathMate command center" : "PathMate 커리어 콕핏"}
+        description={isEn ? "Track readiness, route priority, weekly actions, and next decisions from one focused cockpit." : "준비도, 경로 우선순위, 주간 액션, 다음 결정을 하나의 콕핏에서 확인하세요."}
+        actions={
+          <>
+            <Link href="/matching" className="primary-btn px-5 py-3 text-sm">{isEn ? "Find route" : "지원 경로 찾기"}</Link>
+            <Link href="/profile" className="secondary-btn px-5 py-3 text-sm">{isEn ? "Tune profile" : "프로필 조정"}</Link>
+          </>
+        }
+      />
 
-          {loading && <p className="mt-4 text-sm text-slate-600">{isEn ? "Calculating insights..." : "인사이트를 계산하는 중입니다..."}</p>}
-          {message && !loading && <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</p>}
+      {loading ? <Notice>{isEn ? "Calculating readiness signal..." : "Readiness Signal 계산 중..."}</Notice> : null}
+      {message && !loading ? <Notice tone="warning">{message}</Notice> : null}
 
-          {!loading && !message && insight && (
-            <>
-              <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 md:col-span-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">AI Rank Insight</p>
-                  <h2 className="mt-2 text-lg font-semibold text-slate-900">
-                    {isEn ? (
-                      <>
-                        {insight.name}, your prep rank is top <span className="text-blue-700">{animatedPercent}%</span>
-                      </>
-                    ) : (
-                      <>
-                        현재 {insight.name}님은 취준 상위 <span className="text-blue-700">{animatedPercent}%</span>
-                      </>
-                    )}
-                  </h2>
-                  <div className="mt-3 h-3 rounded-full bg-blue-100">
-                    <div className="h-3 rounded-full bg-blue-600 transition-all duration-200" style={{ width: `${100 - animatedPercent}%` }} />
-                  </div>
-                  <ul className="mt-3 list-disc pl-5 text-sm text-slate-700">
-                    {insight.signals.map((signal) => (
-                      <li key={signal}>{signal}</li>
-                    ))}
-                  </ul>
+      {!loading && !message && insight ? (
+        <>
+          <section className="grid gap-5 lg:grid-cols-[0.72fr_1.28fr]">
+            <PagePanel className="flex flex-col items-center justify-center text-center">
+              <div className="score-ring" style={{ "--score": readiness } as CSSProperties}>
+                <div>
+                  <p className="text-4xl font-semibold text-[var(--foreground)]">{readiness}%</p>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Path Score</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">{isEn ? "Profile Completeness" : "프로필 완성도"}</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-900">{insight.completeness}%</p>
-                  <div className="mt-3 h-2 rounded-full bg-slate-100">
-                    <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${insight.completeness}%` }} />
+              </div>
+              <p className="mt-5 text-lg font-semibold text-[var(--foreground)]">{routeStatus}</p>
+              <p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted)]">
+                {isEn ? `${insight.name}, your preparation rank is currently top ${animatedPercent}%.` : `${insight.name}님의 현재 준비 랭크는 상위 ${animatedPercent}%입니다.`}
+              </p>
+            </PagePanel>
+
+            <PagePanel>
+              <SectionTitle title="Readiness Signal Map" description={isEn ? "A compact view of profile signal, route momentum, and weekly proof." : "프로필 신호, 경로 추진력, 주간 증거를 압축해서 보여줍니다."} />
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <MetricTile label="Profile" value={`${insight.completeness}%`} helper={isEn ? "Signal completeness" : "신호 완성도"} />
+                <MetricTile label="Route" value={`${readiness}%`} helper={isEn ? "Decision confidence" : "결정 신뢰도"} />
+                <MetricTile label="Rank" value={`Top ${animatedPercent}%`} helper={isEn ? "Relative readiness" : "상대 준비도"} />
+              </div>
+              <div className="mt-5 space-y-3">
+                {[
+                  [isEn ? "Profile completeness" : "프로필 완성도", insight.completeness, "var(--accent-2)"],
+                  [isEn ? "Application readiness" : "지원 준비도", readiness, "var(--success)"],
+                  [isEn ? "Gap pressure" : "보완 압력", Math.max(8, 100 - readiness), "var(--warning)"],
+                ].map(([label, value, color]) => (
+                  <div key={String(label)}>
+                    <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[var(--muted)]">
+                      <span>{label}</span>
+                      <span>{value}%</span>
+                    </div>
+                    <div className="signal-bar">
+                      <div className="h-full rounded-full" style={{ width: `${value}%`, background: String(color) }} />
+                    </div>
                   </div>
-                  <Link href="/profile" className="secondary-btn mt-4 inline-block px-3 py-2 text-xs">
-                    {isEn ? "Improve Profile" : "프로필 보완하기"}
+                ))}
+              </div>
+            </PagePanel>
+          </section>
+
+          <section className="mt-5">
+            <PagePanel>
+              <SectionTitle title={isEn ? "Route Workflow" : "경로 워크플로우"} description="Profile -> Match -> Practice -> Apply" />
+              <div className="path-route mt-5">
+                {workflow.map((step, index) => (
+                  <Link key={step.href} href={step.href} className="path-step clickable-card">
+                    <div className="path-dot">{index + 1}</div>
+                    <p className="mt-4 text-sm font-semibold text-[var(--foreground)]">{isEn ? step.labelEn : step.labelKo}</p>
+                    <p className="mt-1 text-xs font-semibold text-[var(--muted)]">{isEn ? step.titleEn : step.titleKo}</p>
                   </Link>
-                </div>
+                ))}
               </div>
+            </PagePanel>
+          </section>
 
-              <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">{isEn ? "Recent 5-week Trend" : "최근 5주 준비 추이"}</p>
-                <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  {(() => {
-                    const chart = buildTrendChart(insight.trend);
-                    return (
-                      <svg viewBox={`0 0 ${chart.width} ${chart.height}`} className="h-40 w-full" role="img" aria-label={isEn ? "Recent 5-week trend graph" : "최근 5주 준비 추이 그래프"}>
-                        <defs>
-                          <linearGradient id="trendArea" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#f87171" stopOpacity="0.26" />
-                            <stop offset="100%" stopColor="#f87171" stopOpacity="0.02" />
-                          </linearGradient>
-                        </defs>
-                        <path d={`M ${chart.left} ${chart.bottom} L ${chart.width - chart.right} ${chart.bottom}`} stroke="#cbd5e1" strokeWidth="1" />
-                        <path d={chart.areaPath} fill="url(#trendArea)" />
-                        <path d={chart.path} fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                        {chart.points.map((point, idx) => (
-                          <g key={`${point.value}-${idx}`}>
-                            <circle cx={point.x} cy={point.y} r="5" fill="#fee2e2" />
-                            <circle cx={point.x} cy={point.y} r="3.2" fill="#dc2626" />
-                            <text x={point.x} y="124" textAnchor="middle" fontSize="11" fill="#64748b">
-                              W{idx + 1}
-                            </text>
-                          </g>
-                        ))}
-                      </svg>
-                    );
-                  })()}
-                </div>
+          <section className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+            <PagePanel>
+              <SectionTitle title={isEn ? "Weekly Navigation Tasks" : "주간 내비게이션 태스크"} />
+              <div className="timeline-list mt-5">
+                {insight.weeklyReport.map((line, index) => (
+                  <div key={line} className="timeline-row">
+                    <span className="timeline-marker" />
+                    <p className="text-sm leading-6 text-[var(--muted-strong)]">{line}</p>
+                    <span className="text-xs font-semibold text-[var(--muted)]">0{index + 1}</span>
+                  </div>
+                ))}
               </div>
+            </PagePanel>
 
-              <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">{isEn ? "Weekly Action Report" : "주간 실행 리포트"}</p>
-                <ul className="mt-2 list-disc pl-5 text-sm text-slate-700">
-                  {insight.weeklyReport.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
+            <PagePanel>
+              <SectionTitle title={isEn ? "Decision Signals" : "결정 지원 신호"} />
+              <div className="mt-5 grid gap-3">
+                {insight.signals.map((signal) => (
+                  <div key={signal} className="content-card p-4">
+                    <p className="text-sm leading-6 text-[var(--muted-strong)]">{signal}</p>
+                  </div>
+                ))}
               </div>
-
-              <div className="mt-5 grid gap-3 md:grid-cols-4">
-                <Link href="/profile" className="surface-card p-4 hover:border-blue-300">
-                  <div className="flex items-center gap-2">
-                    <QuickActionIcon name="profile" />
-                    <p className="text-sm font-semibold text-slate-900">{isEn ? "Profile Setup" : "프로필 설정"}</p>
-                  </div>
-                </Link>
-                <Link href="/matching" className="surface-card p-4 hover:border-blue-300">
-                  <div className="flex items-center gap-2">
-                    <QuickActionIcon name="matching" />
-                    <p className="text-sm font-semibold text-slate-900">{isEn ? "Job Matching" : "채용 매칭"}</p>
-                  </div>
-                </Link>
-                <Link href="/cover-letter" className="surface-card p-4 hover:border-blue-300">
-                  <div className="flex items-center gap-2">
-                    <QuickActionIcon name="coverLetter" />
-                    <p className="text-sm font-semibold text-slate-900">{isEn ? "AI Cover Letter" : "AI 커버레터"}</p>
-                  </div>
-                </Link>
-                <Link href="/simulator" className="surface-card p-4 hover:border-blue-300">
-                  <div className="flex items-center gap-2">
-                    <QuickActionIcon name="simulator" />
-                    <p className="text-sm font-semibold text-slate-900">{isEn ? "Simulator" : "시뮬레이터"}</p>
-                  </div>
-                </Link>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+            </PagePanel>
+          </section>
+        </>
+      ) : null}
+    </PageShell>
   );
 }
+
+

@@ -1,8 +1,10 @@
 ﻿"use client";
 
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
 
 type ProfileData = {
@@ -113,6 +115,12 @@ export default function MatchingPage() {
         return;
       }
 
+      const session = await getSessionWithRetry();
+      if (!session) {
+        window.location.href = "/login";
+        return;
+      }
+
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
         window.location.href = "/login";
@@ -137,8 +145,7 @@ export default function MatchingPage() {
 
       setLoading(false);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const token = session.access_token;
       if (!token) return;
 
       setRealJobsLoading(true);
@@ -202,77 +209,99 @@ export default function MatchingPage() {
   };
 
   return (
-    <div className="app-bg px-4 py-8">
-      <div className="mx-auto w-full max-w-4xl">
-        <div className="surface-card p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Matching</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">{t("상세 프로필 기반 채용 매칭", "Profile-Based Job Matching")}</h1>
-          <p className="mt-2 text-sm text-slate-600">{t("현재 모집중 실공고를 검증하고 공개 지원자수 기반 경쟁 강도와 지원 우선순위를 함께 봅니다.", "Review verified live postings with public applicant signals and application priority.")}</p>
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+    <PageShell maxWidth="max-w-7xl">
+      <PageHeader
+        eyebrow="Matching Cockpit"
+        title={t("상세 프로필 기반 채용 매칭", "Profile-Based Job Matching")}
+        description={t("실공고, 경쟁 신호, 프로필 적합도를 하나의 대시보드에서 우선순위화합니다.", "Prioritize live postings, competition signals, and profile fit in one dashboard.")}
+        actions={
+          <>
             <Link href="/profile" className="secondary-btn px-3 py-2 text-sm">
               {t("프로필 수정", "Edit profile")}
             </Link>
             <Link href="/dashboard" className="secondary-btn px-3 py-2 text-sm">
               {t("대시보드", "Dashboard")}
             </Link>
-          </div>
+          </>
+        }
+      />
 
+      <PagePanel>
+        <SectionTitle title={t("Route intelligence", "Route intelligence")} description={t("내 프로필과 실공고 신호를 연결해 지원 우선순위를 계산합니다.", "Connect your profile with live market signals to prioritize applications.")} />
           {loading && (
-            <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{t("매칭 데이터를 계산하는 중입니다...", "Calculating matching data...")}</p>
+            <Notice className="mt-4">{t("매칭 데이터를 계산하는 중입니다...", "Calculating matching data...")}</Notice>
           )}
 
           {!loading && message && (
-            <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</p>
+            <Notice className="mt-4">{message}</Notice>
           )}
 
           {!loading && !message && profile && (
             <>
-              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                {t("프로필 요약", "Profile summary")}: {profile.school_name || t("학교 미입력", "School missing")} / {profile.major || t("전공 미입력", "Major missing")} / GPA {profile.gpa_score ?? 0} / {profile.gpa_scale ?? 4.5}
+              <div className="content-card mt-5 grid gap-3 p-4 text-sm text-[var(--muted-strong)] md:grid-cols-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{t("학교", "School")}</p>
+                  <p className="mt-1 font-medium text-[var(--foreground)]">{profile.school_name || t("미입력", "Missing")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{t("전공", "Major")}</p>
+                  <p className="mt-1 font-medium text-[var(--foreground)]">{profile.major || t("미입력", "Missing")}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">GPA</p>
+                  <p className="mt-1 font-medium text-[var(--foreground)]">{profile.gpa_score ?? 0} / {profile.gpa_scale ?? 4.5}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{t("목표", "Target")}</p>
+                  <p className="mt-1 font-medium text-[var(--foreground)]">{profile.target_role || t("미입력", "Missing")}</p>
+                </div>
               </div>
 
-              <h2 className="mt-6 text-lg font-semibold text-slate-900">{t("AI 추천 직종 (자소서/이력 기반)", "AI-Recommended Roles")}</h2>
+              <div className="mt-6">
+                <SectionTitle title={t("AI 추천 직종", "AI-Recommended Roles")} description={t("자소서/이력 기반 역할 신호입니다.", "Role signals based on resume and writing context.")} />
+              </div>
               {recommendedRoles.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {recommendedRoles.map((role) => (
-                    <span key={role} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                    <span key={role} className="chip">
                       {role}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-slate-600">{t("자소서/이력 기반 추천 직종을 계산 중이거나 결과가 없습니다.", "No recommended roles yet.")}</p>
+                <EmptyState>{t("자소서/이력 기반 추천 직종을 계산 중이거나 결과가 없습니다.", "No recommended roles yet.")}</EmptyState>
               )}
 
-              <h2 className="mt-6 text-lg font-semibold text-slate-900">{t("현재 모집중 실공고 추천", "Live Job Recommendations")}</h2>
-              <p className="mt-1 text-xs text-slate-500">
+              <div className="mt-6">
+                <SectionTitle title={t("현재 모집중 실공고 추천", "Live Job Recommendations")} description={sourceLabel(realJobsSource)} />
+              </div>
+              <p className="mt-1 text-xs text-[var(--muted)]">
                 {sourceLabel(realJobsSource)}
               </p>
 
-              {realJobsLoading && <p className="mt-2 text-sm text-slate-600">{t("실제 공고를 찾는 중입니다...", "Searching live postings...")}</p>}
+              {realJobsLoading && <Notice className="mt-2">{t("실제 공고를 찾는 중입니다...", "Searching live postings...")}</Notice>}
               {!realJobsLoading && realJobsMessage && (
-                <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{realJobsMessage}</p>
+                <Notice className="mt-2" tone="warning">{realJobsMessage}</Notice>
               )}
               {!realJobsLoading && !realJobsMessage && marketInsights && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4">
+                <div className="content-card mt-3 p-4">
                   <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-                    <div className="rounded-md bg-slate-50 p-3 text-slate-800">
-                      <p className="text-xs font-semibold text-slate-500">{t("평균 지원자수/공고", "Avg. applicants/posting")}</p>
-                      <p className="mt-1 text-lg font-bold text-slate-900">{formatNumber(marketInsights.averageApplicantsPerPosting)}</p>
+                    <div className="content-card p-3 text-[var(--muted-strong)]">
+                      <p className="text-xs font-medium text-[var(--muted)]">{t("평균 지원자수/공고", "Avg. applicants/posting")}</p>
+                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{formatNumber(marketInsights.averageApplicantsPerPosting)}</p>
                     </div>
-                    <div className="rounded-md bg-slate-50 p-3 text-slate-800">
-                      <p className="text-xs font-semibold text-slate-500">{t("평균 조회수/공고", "Avg. views/posting")}</p>
-                      <p className="mt-1 text-lg font-bold text-slate-900">{formatNumber(marketInsights.averageViewsPerPosting)}</p>
+                    <div className="content-card p-3 text-[var(--muted-strong)]">
+                      <p className="text-xs font-medium text-[var(--muted)]">{t("평균 조회수/공고", "Avg. views/posting")}</p>
+                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{formatNumber(marketInsights.averageViewsPerPosting)}</p>
                     </div>
-                    <div className="rounded-md bg-slate-50 p-3 text-slate-800">
-                      <p className="text-xs font-semibold text-slate-500">{t("경쟁 강도", "Competition level")}</p>
-                      <p className="mt-1 text-lg font-bold text-slate-900">{competitionLabel(marketInsights.competitionLevel)}</p>
+                    <div className="content-card p-3 text-[var(--muted-strong)]">
+                      <p className="text-xs font-medium text-[var(--muted)]">{t("경쟁 강도", "Competition level")}</p>
+                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{competitionLabel(marketInsights.competitionLevel)}</p>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-slate-600">{marketInsights.summary}</p>
-                  <p className="mt-1 text-xs text-slate-500">{marketInsights.caveat}</p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-3 text-xs text-[var(--muted)]">{marketInsights.summary}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{marketInsights.caveat}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
                     {t("검증 공고", "Checked postings")}: {marketInsights.postingsChecked}
                     {marketInsights.postingPoolSize ? ` / ${t("검색 풀", "Search pool")}: ${formatNumber(marketInsights.postingPoolSize)}` : ""}
                   </p>
@@ -281,58 +310,82 @@ export default function MatchingPage() {
               {!realJobsLoading && !realJobsMessage && realJobs.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {realJobs.map((job, idx) => (
-                    <div key={`${job.url}-${idx}`} className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-start justify-between gap-3">
+                    <div key={`${job.url}-${idx}`} className="content-card p-4">
+                      <div className="grid gap-4 lg:grid-cols-[auto_1fr_auto] lg:items-start">
+                        <div className="score-ring h-28 w-28" style={{ "--score": job.fitScore } as CSSProperties}>
+                          <div>
+                            <p className="text-2xl font-semibold text-[var(--foreground)]">{job.fitScore}%</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">Match</p>
+                          </div>
+                        </div>
                         <div>
-                          <h3 className="text-base font-semibold text-slate-900">{job.title}</h3>
-                          <p className="text-sm text-slate-600">
+                          <h3 className="text-base font-medium text-[var(--foreground)]">{job.title}</h3>
+                          <p className="text-sm text-[var(--muted)]">
                             {job.company} · {job.location}
                           </p>
-                          <p className="mt-1 text-xs text-emerald-700">
+                          <p className="mt-1 text-xs text-[var(--success)]">
                             {t("모집상태", "Hiring status")}: {job.hiringStatus === "open" ? t("모집중", "Open") : t("확인필요", "Unknown")}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-xs text-[var(--muted)]">
                             {t("출처", "Source")}: {job.sourceLabel}
                           </p>
+                          <p className="mt-3 text-sm text-[var(--muted-strong)]">{job.summary}</p>
                         </div>
                         <a href={job.url} target="_blank" rel="noreferrer" className="secondary-btn px-2 py-1 text-xs">
                           {t("공고 보기", "View posting")}
                         </a>
                       </div>
-                      <p className="mt-2 text-sm text-slate-700">{job.summary}</p>
-                      <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-                        <div className="rounded-md bg-blue-50 p-2 text-blue-800">
-                          {t("적합도", "Fit score")}: {job.fitScore}%
+                      <div className="mt-4 grid grid-cols-1 gap-3 text-xs md:grid-cols-3">
+                        <div className="content-card p-3">
+                          <p className="font-semibold text-[var(--foreground)]">{t("지원 우선순위", "Application priority")}</p>
+                          <div className="signal-bar mt-2">
+                            <div className="signal-fill" style={{ width: `${job.priorityScore}%` }} />
+                          </div>
+                          <p className="mt-2 text-[var(--muted)]">{job.priorityScore}%</p>
                         </div>
-                        <div className="rounded-md bg-emerald-50 p-2 text-emerald-800">
-                          {t("지원 우선순위", "Application priority")}: {job.priorityScore}%
+                        <div className="content-card p-3">
+                          <p className="font-semibold text-[var(--foreground)]">{t("경쟁 강도", "Competition level")}</p>
+                          <p className="mt-2 text-[var(--warning)]">{competitionLabel(job.competitionLevel)}</p>
+                          <p className="mt-1 text-[var(--muted)]">{job.competitionText}</p>
                         </div>
-                        <div className="rounded-md bg-slate-50 p-2 text-slate-800">
-                          {t("경쟁 강도", "Competition level")}: {competitionLabel(job.competitionLevel)}
-                        </div>
-                        <div className="rounded-md bg-slate-50 p-2 text-slate-800">
-                          {job.competitionText}
+                        <div className="content-card p-3">
+                          <p className="font-semibold text-[var(--foreground)]">Skill Gap Map</p>
+                          <div className="signal-bar mt-2">
+                            <div className="h-full rounded-full bg-[var(--warning)]" style={{ width: `${Math.max(12, 100 - job.fitScore)}%` }} />
+                          </div>
+                          <p className="mt-2 text-[var(--muted)]">{t("낮을수록 보완 적음", "Lower means fewer gaps")}</p>
                         </div>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-[var(--muted)]">
                         {t("게시일", "Posted")}: {job.publishedAt || "unknown"} / {t("마감", "Deadline")}: {job.deadline || "unknown"}
                       </p>
                       {job.evidence?.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2 text-xs">
                           {job.evidence.slice(0, 2).map((source) => (
-                            <a key={`${job.url}-${source.url}-${source.label}`} href={source.url} target="_blank" rel="noreferrer" className="font-semibold text-blue-700 hover:text-blue-800">
+                            <a key={`${job.url}-${source.url}-${source.label}`} href={source.url} target="_blank" rel="noreferrer" className="font-medium text-[var(--accent-2)] hover:text-[var(--accent-2)]">
                               {source.label}
                             </a>
                           ))}
                         </div>
                       )}
-                      {job.fitReasons?.length > 0 && (
-                        <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
-                          {job.fitReasons.map((reason) => (
-                            <li key={`${job.url}-${reason}`}>{reason}</li>
-                          ))}
-                        </ul>
-                      )}
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="content-card p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--success)]">{t("Matched strengths", "Matched strengths")}</p>
+                          {job.fitReasons?.length > 0 ? (
+                            <ul className="mt-2 list-disc pl-5 text-xs text-[var(--muted)]">
+                              {job.fitReasons.slice(0, 3).map((reason) => (
+                                <li key={`${job.url}-${reason}`}>{reason}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-2 text-xs text-[var(--muted)]">{t("직접 일치 신호가 아직 부족합니다.", "Direct match signal is still limited.")}</p>
+                          )}
+                        </div>
+                        <div className="content-card p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--warning)]">{t("Risk areas", "Risk areas")}</p>
+                          <p className="mt-2 text-xs leading-5 text-[var(--muted)]">{job.competitionLevel === "high" ? t("경쟁 강도가 높아 정량 성과와 포트폴리오 증거가 필요합니다.", "High competition: add measurable proof and portfolio evidence.") : t("공고 요구사항과 내 경험의 연결 문장을 보강하세요.", "Tighten the bridge between requirements and your evidence.")}</p>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => void loadJobDetailAnalysis(job, idx)}
@@ -347,29 +400,29 @@ export default function MatchingPage() {
               )}
 
               {detailAnalysis && (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">{t("공고 상세 분석", "Detailed Analysis")}</p>
-                  <p className="mt-1 text-sm text-slate-700">{detailAnalysis.fitSummary}</p>
+                <div className="content-card mt-4 p-4">
+                  <p className="text-sm font-medium text-[var(--foreground)]">{t("공고 상세 분석", "Detailed Analysis")}</p>
+                  <p className="mt-1 text-sm text-[var(--muted-strong)]">{detailAnalysis.fitSummary}</p>
                   <div className="mt-2 grid gap-3 md:grid-cols-3">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{t("강점", "Strengths")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                    <div className="content-card p-3">
+                      <p className="text-xs font-medium text-[var(--foreground)]">{t("강점", "Strengths")}</p>
+                      <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
                         {detailAnalysis.strengths.map((s) => (
                           <li key={s}>{s}</li>
                         ))}
                       </ul>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{t("갭", "Gaps")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                    <div className="content-card p-3">
+                      <p className="text-xs font-medium text-[var(--foreground)]">{t("갭", "Gaps")}</p>
+                      <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
                         {detailAnalysis.gaps.map((g) => (
                           <li key={g}>{g}</li>
                         ))}
                       </ul>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{t("실행 과제", "Action Items")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                    <div className="content-card p-3">
+                      <p className="text-xs font-medium text-[var(--foreground)]">{t("실행 과제", "Action Items")}</p>
+                      <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
                         {detailAnalysis.actionItems.map((a) => (
                           <li key={a}>{a}</li>
                         ))}
@@ -380,8 +433,10 @@ export default function MatchingPage() {
               )}
             </>
           )}
-        </div>
-      </div>
-    </div>
+      </PagePanel>
+    </PageShell>
   );
 }
+
+
+

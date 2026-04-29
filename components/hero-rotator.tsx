@@ -55,18 +55,18 @@ export default function HeroRotator({ mode = "card" }: { mode?: "card" | "hero" 
 
   if (mode === "hero") {
     return (
-      <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4 sm:p-5 md:p-6">
-        <p className="inline-block rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+      <div className="rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] p-4 sm:p-5 md:p-6">
+        <p className="inline-block rounded-full border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-semibold text-[var(--accent-2)]">
           Auto Layer · {slides[index].badge}
         </p>
-        <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl md:text-5xl">{slides[index].title}</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-700 md:text-base">{slides[index].body}</p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-[var(--foreground)] sm:text-3xl md:text-5xl">{slides[index].title}</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--muted-strong)] md:text-base">{slides[index].body}</p>
         <div className="mt-4 flex gap-1.5">
           {slides.map((slide, i) => (
             <button
               key={slide.title}
               onClick={() => setIndex(i)}
-              className={`h-2.5 w-8 rounded-full transition-all ${i === index ? "bg-blue-600" : "bg-blue-200"}`}
+              className={`h-2.5 w-8 rounded-full transition-all ${i === index ? "bg-[var(--accent)]" : "bg-[color-mix(in_srgb,var(--accent)_24%,transparent)]"}`}
               aria-label={`slide-${i + 1}`}
             />
           ))}
@@ -77,13 +77,13 @@ export default function HeroRotator({ mode = "card" }: { mode?: "card" | "hero" 
 
   return (
     <div className="bento-card">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Auto Layer Signal</p>
-      <div className="mt-3 min-h-36 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-        <p className="inline-block rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--accent-2)]">Auto Layer Signal</p>
+      <div className="mt-3 min-h-36 rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] p-4">
+        <p className="inline-block rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent-2)]">
           {slides[index].badge}
         </p>
-        <h3 className="mt-2 text-lg font-semibold text-slate-900">{slides[index].title}</h3>
-        <p className="mt-1 text-sm leading-6 text-slate-700">{slides[index].body}</p>
+        <h3 className="mt-2 text-lg font-semibold text-[var(--foreground)]">{slides[index].title}</h3>
+        <p className="mt-1 text-sm leading-6 text-[var(--muted-strong)]">{slides[index].body}</p>
       </div>
 
       <div className="mt-3 flex gap-1.5">
@@ -91,7 +91,7 @@ export default function HeroRotator({ mode = "card" }: { mode?: "card" | "hero" 
           <button
             key={slide.title}
             onClick={() => setIndex(i)}
-            className={`h-2 w-6 rounded-full transition-all ${i === index ? "bg-blue-600" : "bg-blue-200"}`}
+            className={`h-2 w-6 rounded-full transition-all ${i === index ? "bg-[var(--accent)]" : "bg-[color-mix(in_srgb,var(--accent)_24%,transparent)]"}`}
             aria-label={`slide-${i + 1}`}
           />
         ))}
@@ -99,3 +99,5 @@ export default function HeroRotator({ mode = "card" }: { mode?: "card" | "hero" 
     </div>
   );
 }
+
+

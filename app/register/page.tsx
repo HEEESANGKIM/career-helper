@@ -66,7 +66,10 @@ export default function RegisterPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
     setLoading(false);
@@ -83,13 +86,13 @@ export default function RegisterPage() {
     <div className="app-bg px-4 py-10">
       <div className="mx-auto w-full max-w-md">
         <div className="surface-card p-7">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Career Helper</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">{t("회원가입", "Sign Up")}</h1>
-          <p className="mt-1 text-sm text-slate-600">{t("기본 정보로 빠르게 계정을 만드세요.", "Create your account quickly.")}</p>
+          <p className="page-kicker">Pathmate.ai</p>
+          <h1 className="gradient-title mt-4 text-3xl font-semibold">{t("회원가입", "Sign Up")}</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">{t("기본 정보로 빠르게 계정을 만드세요.", "Create your account quickly.")}</p>
 
           <form className="mt-5 space-y-3" onSubmit={handleRegister}>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-900">{t("이메일", "Email")}</label>
+              <label className="form-label">{t("이메일", "Email")}</label>
               <input
                 type="email"
                 value={email}
@@ -100,7 +103,7 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-900">{t("비밀번호", "Password")}</label>
+              <label className="form-label">{t("비밀번호", "Password")}</label>
               <input
                 type="password"
                 value={password}
@@ -116,7 +119,7 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <div className="my-4 border-t border-slate-200 pt-4">
+          <div className="my-4 border-t border-[var(--line)] pt-4">
             <button
               onClick={handleGoogleRegister}
               disabled={loading}
@@ -126,11 +129,11 @@ export default function RegisterPage() {
             </button>
           </div>
 
-          {message && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</p>}
+          {message && <p className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 text-sm text-[var(--muted-strong)]">{message}</p>}
 
-          <div className="mt-4 text-center text-sm text-slate-600">
+          <div className="mt-4 text-center text-sm text-[var(--muted)]">
             {t("이미 계정이 있나요?", "Already have an account?")} {" "}
-            <Link className="font-semibold text-blue-700 hover:text-blue-800" href="/login">
+            <Link className="font-medium text-[var(--accent-2)] hover:text-[var(--accent-2)]" href="/login">
               {t("로그인", "Log in")}
             </Link>
           </div>
@@ -139,3 +142,6 @@ export default function RegisterPage() {
     </div>
   );
 }
+
+
+

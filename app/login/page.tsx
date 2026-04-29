@@ -67,7 +67,10 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
     setLoading(false);
@@ -89,13 +92,13 @@ export default function LoginPage() {
     <div className="app-bg px-4 py-10">
       <div className="mx-auto w-full max-w-md">
         <div className="surface-card p-7">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Career Helper</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">{t("로그인", "Log In")}</h1>
-          <p className="mt-1 text-sm text-slate-600">{t("이메일 또는 Google 계정으로 로그인하세요.", "Sign in with email or Google account.")}</p>
+          <p className="page-kicker">Pathmate.ai</p>
+          <h1 className="gradient-title mt-4 text-3xl font-semibold">{t("로그인", "Log In")}</h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">{t("이메일 또는 Google 계정으로 로그인하세요.", "Sign in with email or Google account.")}</p>
 
           <form className="mt-5 space-y-3" onSubmit={handleLogin}>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-900">{t("이메일", "Email")}</label>
+              <label className="form-label">{t("이메일", "Email")}</label>
               <input
                 type="email"
                 value={email}
@@ -106,7 +109,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-900">{t("비밀번호", "Password")}</label>
+              <label className="form-label">{t("비밀번호", "Password")}</label>
               <input
                 type="password"
                 value={password}
@@ -121,7 +124,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="my-4 border-t border-slate-200 pt-4">
+          <div className="my-4 border-t border-[var(--line)] pt-4">
             <button
               onClick={handleGoogleLogin}
               disabled={loading}
@@ -131,11 +134,11 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {message && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</p>}
+          {message && <p className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3 text-sm text-[var(--muted-strong)]">{message}</p>}
 
-          <div className="mt-4 text-center text-sm text-slate-600">
+          <div className="mt-4 text-center text-sm text-[var(--muted)]">
             {t("아직 계정이 없나요?", "No account yet?")} {" "}
-            <Link className="font-semibold text-blue-700 hover:text-blue-800" href="/register">
+            <Link className="font-medium text-[var(--accent-2)] hover:text-[var(--accent-2)]" href="/register">
               {t("회원가입", "Sign up")}
             </Link>
           </div>
@@ -144,3 +147,6 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+

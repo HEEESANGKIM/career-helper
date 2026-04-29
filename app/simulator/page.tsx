@@ -1,781 +1,501 @@
-﻿"use client";
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { useCallback, useMemo, useState } from "react";
+import { EmptyState, MetricTile, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
 import { useLanguage } from "@/components/language-provider";
 
-type LanguageMode = "ko" | "en";
+type InterviewPhase = "intro" | "behavioral" | "technical" | "followup" | "summary";
 
-type LocalizedText = {
-  ko: string;
-  en: string;
-};
-
-type Candidate = {
-  id: string;
-  name: string;
-  kind: "user" | "human" | "ai";
-  resumeScore: number;
-  essayScore: number;
-  interviewScore: number;
-  totalScore: number;
-};
-
-type InterviewPlan = {
+type InterviewQuestion = {
+  phase: Extract<InterviewPhase, "behavioral" | "technical">;
   question: string;
   rubric: string[];
-  followUps: string[];
-  expectedSignals: string[];
-  timeLimitSec: number;
 };
 
-type InterviewEval = {
+type EvaluationResult = {
   score: number;
   summary: string;
   strengths: string[];
   improvements: string[];
-  categoryScores: {
-    problemSolving: number;
-    technicalDepth: number;
-    communication: number;
-    impact: number;
+};
+
+type HistoryItem = {
+  question: string;
+  answer: string;
+  result: EvaluationResult;
+  timestamp: string;
+};
+
+const interviewQuestions: InterviewQuestion[] = [
+  {
+    phase: "behavioral",
+    question: "Tell me about a project where you had to solve an ambiguous problem with limited guidance.",
+    rubric: ["Situation", "Ownership", "Action", "Result"],
+  },
+  {
+    phase: "technical",
+    question: "Describe a technical decision you made recently. What trade-offs did you consider?",
+    rubric: ["Technical depth", "Trade-offs", "Reasoning", "Impact"],
+  },
+  {
+    phase: "behavioral",
+    question: "Tell me about a time you received difficult feedback and how you responded.",
+    rubric: ["Self-awareness", "Learning", "Communication", "Outcome"],
+  },
+  {
+    phase: "technical",
+    question: "Walk me through how you would debug a production issue that users are reporting intermittently.",
+    rubric: ["Debugging process", "Prioritization", "Observability", "Prevention"],
+  },
+];
+
+function evaluateAnswer(answer: string): EvaluationResult {
+  const trimmed = answer.trim();
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  const hasNumbers = /\d|percent|%|users|requests|seconds|minutes|hours|revenue|cost|latency|명|개|%|건|시간|분|초|원|억|만/i.test(trimmed);
+  const hasStructure = /situation|task|action|result|because|therefore|first|then|finally|상황|역할|행동|결과|먼저|그래서|마지막으로|왜냐하면/i.test(trimmed);
+  const hasChallenge = /challenge|difficult|hard|blocked|issue|risk|conflict|trade-?off|problem|어려움|문제|도전|갈등|리스크|힘들었|막혔/i.test(trimmed);
+
+  const score = Math.max(
+    35,
+    Math.min(95, 42 + Math.min(25, wordCount) + (hasNumbers ? 12 : 0) + (hasStructure ? 9 : 0) + (hasChallenge ? 7 : 0)),
+  );
+
+  return {
+    score,
+    summary:
+      score >= 80
+        ? "Strong answer with clear evidence and a credible decision path."
+        : score >= 65
+          ? "Solid foundation, but the answer needs sharper evidence and more specific outcomes."
+          : "The answer is understandable, but it needs more context, action detail, and measurable impact.",
+    strengths: [
+      hasStructure ? "The response has a clear narrative structure." : "The response identifies the main topic directly.",
+      hasChallenge ? "It includes some complexity or challenge." : "It stays focused on the question.",
+    ],
+    improvements: [
+      hasNumbers ? "Connect the metric more explicitly to your personal contribution." : "Add a measurable result or quantitative impact.",
+      wordCount >= 80 ? "Tighten the ending into a concise takeaway." : "Expand the situation, your role, action, and result.",
+    ],
   };
-  hiringSignal: "strong_hire" | "proceed" | "hold" | "reject";
-  nextStepAdvice: string[];
-};
+}
 
-type VirtualPosting = {
-  id: string;
-  title: LocalizedText;
-  company: string;
-  role: LocalizedText;
-  location: LocalizedText;
-  deadline: string;
-  humanApplicants: number;
-  description: LocalizedText;
-  requirements: LocalizedText[];
-  screeningFocus: LocalizedText[];
-  source: "ai_generated" | "template_fallback";
-};
+function generateFollowUpQuestion(answer: string) {
+  const trimmed = answer.trim();
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  const hasNumbers = /\d|percent|%|users|requests|seconds|minutes|hours|revenue|cost|latency|명|개|%|건|시간|분|초|원/i.test(trimmed);
+  const hasChallenge = /challenge|difficult|hard|blocked|issue|risk|conflict|trade-?off|problem|어려움|문제|도전|갈등|힘들었|막혔/i.test(trimmed);
 
-type ProfileSummary = {
-  target_role: string | null;
-  preferred_location: string | null;
-  core_skills: string | null;
-  tech_stack: string | null;
-  major: string | null;
-  project_count: number | null;
-  internship_count: number | null;
-};
+  if (wordCount < 45) {
+    return "Can you explain the situation, your specific role, the actions you took, and the final result in more detail?";
+  }
+  if (!hasNumbers) {
+    return "What measurable outcome or quantitative impact can you add to prove the result of your work?";
+  }
+  if (!hasChallenge) {
+    return "What was the hardest part of this experience, and how did you work through it?";
+  }
+  return "If you had to make the same technical or product decision again, what would you change and why?";
+}
 
-const MAX_CAPACITY = 10;
+function shorten(text: string, maxLength = 96) {
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
+}
 
-const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+function answerDimensions(result: EvaluationResult | null) {
+  const score = result?.score ?? 0;
+  return [
+    { label: "Structure", value: Math.min(96, score + 6) },
+    { label: "Evidence", value: Math.max(24, score - 8) },
+    { label: "Impact", value: Math.max(18, score - 14) },
+    { label: "Clarity", value: Math.min(92, score + 2) },
+  ];
+}
 
-const genAiName = (idx: number) => {
-  const prefix = ["Mina", "Suhyeon", "Yujin", "Doyun", "Harin", "Junseo", "Chaewon", "Hyunwoo", "Nayeon"];
-  return `${prefix[idx % prefix.length]}_AI_${idx + 1}`;
-};
-
-const isPostingOpen = (deadline: string) => {
-  const time = new Date(deadline).getTime();
-  return Number.isFinite(time) && time > Date.now();
-};
-
-const openPostingsOnly = (postings: VirtualPosting[]) =>
-  postings
-    .filter((posting) => isPostingOpen(posting.deadline))
-    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
-
-const formatDeadline = (deadline: string, language: LanguageMode) =>
-  new Intl.DateTimeFormat(language === "en" ? "en-US" : "ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(deadline));
+function getReadinessStatus(score: number, answered: number, isEn: boolean) {
+  if (answered === 0) return { label: isEn ? "Not started" : "미시작", className: "border-[var(--line)] bg-[var(--surface)] text-[var(--muted-strong)]" };
+  if (score >= 82) return { label: isEn ? "Interview-ready" : "면접 준비 완료", className: "border-[color-mix(in_srgb,var(--success)_42%,var(--line))] bg-[color-mix(in_srgb,var(--success)_14%,transparent)] text-[var(--foreground)]" };
+  if (score >= 68) return { label: isEn ? "Nearly ready" : "거의 준비됨", className: "border-[color-mix(in_srgb,var(--accent-2)_42%,var(--line))] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] text-[var(--foreground)]" };
+  return { label: isEn ? "Needs practice" : "연습 필요", className: "border-[color-mix(in_srgb,var(--warning)_42%,var(--line))] bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-[var(--foreground)]" };
+}
 
 export default function SimulatorPage() {
   const { language } = useLanguage();
   const isEn = language === "en";
   const t = useCallback((ko: string, en: string) => (isEn ? en : ko), [isEn]);
 
-  const [userName, setUserName] = useState(t("지원자", "Applicant"));
-  const [stage, setStage] = useState<"jobs" | "docs" | "essay" | "interview" | "result">("jobs");
-  const [activePosting, setActivePosting] = useState<VirtualPosting | null>(null);
-  const [allCandidates, setAllCandidates] = useState<Candidate[]>([]);
-  const [docPassCandidates, setDocPassCandidates] = useState<Candidate[]>([]);
-  const [essayAnswer, setEssayAnswer] = useState("");
-  const [essaySubmitted, setEssaySubmitted] = useState(false);
-  const [interviewPlan, setInterviewPlan] = useState<InterviewPlan | null>(null);
-  const [timeLeft, setTimeLeft] = useState(120);
+  const phaseLabel: Record<InterviewPhase, string> = useMemo(() => ({
+    intro: t("소개", "Intro"),
+    behavioral: t("행동", "Behavioral"),
+    technical: t("기술", "Technical"),
+    followup: t("심화", "Follow-up"),
+    summary: t("요약", "Summary"),
+  }), [t]);
+
+  const phaseDescription: Record<InterviewPhase, string> = useMemo(() => ({
+    intro: t("큰 질문으로 시작해 맥락을 잡습니다.", "Start with a broad question and establish context."),
+    behavioral: t("오너십, 판단력, 커뮤니케이션을 보여주세요.", "Show ownership, judgment, and communication."),
+    technical: t("트레이드오프, 시스템 사고, 디버깅 깊이를 설명하세요.", "Explain trade-offs, systems thinking, and debugging depth."),
+    followup: t("증거, 제약, 회고를 심화합니다.", "Go deeper on evidence, constraints, and reflection."),
+    summary: t("세션 신호를 검토하고 다음 개선점을 결정하세요.", "Review the session signal and decide what to improve next."),
+  }), [t]);
+
+  const phaseFlow: InterviewPhase[] = ["intro", "behavioral", "technical", "followup", "summary"];
+
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [phase, setPhase] = useState<InterviewPhase>("intro");
+  const [currentQuestion, setCurrentQuestion] = useState(interviewQuestions[0].question);
+  const [currentRubric, setCurrentRubric] = useState(interviewQuestions[0].rubric);
   const [answer, setAnswer] = useState("");
-  const [interviewEval, setInterviewEval] = useState<InterviewEval | null>(null);
-  const [finalHires, setFinalHires] = useState<Candidate[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [virtualPostings, setVirtualPostings] = useState<VirtualPosting[]>([]);
-  const [postingsLoading, setPostingsLoading] = useState(true);
-  const [postingsMessage, setPostingsMessage] = useState("");
-  const [postingsSource, setPostingsSource] = useState<"ai_generated" | "template_fallback" | "">("");
-  const [postingsGeneratedAt, setPostingsGeneratedAt] = useState("");
+  const [result, setResult] = useState<EvaluationResult | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [followUpQuestion, setFollowUpQuestion] = useState("");
+  const [lastEvaluatedKey, setLastEvaluatedKey] = useState("");
 
-  useEffect(() => {
-    setUserName((prev) => prev || t("지원자", "Applicant"));
-  }, [t]);
+  const sessionStats = useMemo(() => {
+    const totalAnswered = history.length;
+    const latestScore = history[0]?.result.score ?? 0;
+    const averageScore = totalAnswered
+      ? Math.round(history.reduce((sum, item) => sum + item.result.score, 0) / totalAnswered)
+      : 0;
 
-  const sourceLabel = (source: typeof postingsSource) => {
-    if (source === "ai_generated") return t("AI 생성 가상 공고", "AI-generated mock postings");
-    if (source === "template_fallback") return t("기본 템플릿 공고", "Template fallback postings");
-    return t("생성 중", "Generating");
-  };
+    const readiness = getReadinessStatus(averageScore, totalAnswered, isEn);
+    const strongestArea =
+      averageScore >= 80
+        ? t("강한 증거와 구조적 전달", "Strong evidence and structured delivery")
+        : averageScore >= 65
+          ? t("기본기 양호, 임팩트 보강 중", "Good baseline, keep sharpening impact")
+          : t("연습이 더 필요합니다", "Needs more practice");
 
-  const loadProfileSummary = useCallback(async () => {
-    if (!supabase || !isSupabaseConfigured) return { profileSummary: "", targetRole: "" };
+    return { totalAnswered, latestScore, averageScore, strongestArea, readiness };
+  }, [history, isEn, t]);
 
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return { profileSummary: "", targetRole: "" };
+  const progressWidth = history.length > 0 ? Math.max(8, Math.min(100, sessionStats.averageScore)) : 0;
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("target_role, preferred_location, core_skills, tech_stack, major, project_count, internship_count")
-      .eq("user_id", userData.user.id)
-      .maybeSingle();
+  const evaluate = () => {
+    const trimmed = answer.trim();
+    if (!trimmed) return;
 
-    const profile = (data ?? null) as ProfileSummary | null;
-    if (!profile) return { profileSummary: "", targetRole: "" };
+    const nextResult = evaluateAnswer(trimmed);
+    const nextFollowUp = generateFollowUpQuestion(trimmed);
+    const evaluationKey = `${currentQuestion}::${trimmed}`;
 
-    const profileSummary = [
-      `${t("희망직무", "Target role")}: ${profile.target_role ?? ""}`,
-      `${t("희망지역", "Preferred location")}: ${profile.preferred_location ?? ""}`,
-      `${t("전공", "Major")}: ${profile.major ?? ""}`,
-      `${t("핵심스킬", "Core skills")}: ${profile.core_skills ?? ""}`,
-      `${t("기술스택", "Tech stack")}: ${profile.tech_stack ?? ""}`,
-      `${t("프로젝트", "Projects")}: ${profile.project_count ?? 0}`,
-      `${t("인턴", "Internships")}: ${profile.internship_count ?? 0}`,
-    ].join(" | ");
-
-    return { profileSummary, targetRole: profile.target_role ?? "" };
-  }, [t]);
-
-  const loadVirtualPostings = useCallback(async () => {
-    setPostingsLoading(true);
-    setPostingsMessage("");
-
-    const { profileSummary, targetRole } = await loadProfileSummary();
-    const res = await fetch(`/api/simulator?ts=${Date.now()}`, {
-      method: "POST",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "postings",
-        language,
-        profileSummary,
-        targetRole,
-      }),
+    setResult(nextResult);
+    setFollowUpQuestion(nextFollowUp);
+    setPhase((prev) => {
+      if (prev === "followup") return "summary";
+      if (prev === "intro") return interviewQuestions[questionIndex].phase;
+      if (prev === "summary") return "behavioral";
+      return prev;
     });
-    const json = await res.json();
-    setPostingsLoading(false);
 
-    if (!res.ok) {
-      setVirtualPostings([]);
-      setPostingsMessage(json.error ?? t("가상 공고 생성에 실패했습니다.", "Failed to generate mock postings."));
-      return;
+    if (evaluationKey !== lastEvaluatedKey) {
+      setHistory((prev) => [
+        { question: currentQuestion, answer: trimmed, result: nextResult, timestamp: new Date().toISOString() },
+        ...prev,
+      ]);
+      setLastEvaluatedKey(evaluationKey);
     }
-
-    const items = Array.isArray(json.items) ? openPostingsOnly(json.items as VirtualPosting[]) : [];
-    setVirtualPostings(items);
-    setPostingsSource(json.source ?? "");
-    setPostingsGeneratedAt(json.generatedAt ?? "");
-    setPostingsMessage(
-      items.length > 0
-        ? ""
-        : t("현재 열려 있는 가상 공고가 없습니다. 새로 생성해 주세요.", "No open mock postings are available. Generate a new set."),
-    );
-  }, [language, loadProfileSummary, t]);
-
-  useEffect(() => {
-    void loadVirtualPostings();
-  }, [loadVirtualPostings]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setVirtualPostings((prev) => openPostingsOnly(prev));
-    }, 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const interviewSignalLabel = useMemo(() => {
-    return {
-      strong_hire: t("강력 추천", "Strong Hire"),
-      proceed: t("다음 라운드 진행", "Proceed"),
-      hold: t("보류", "Hold"),
-      reject: t("불합격 권고", "Reject"),
-    } as const;
-  }, [t]);
-
-  const fetchUserName = async () => {
-    if (!supabase || !isSupabaseConfigured) return userName;
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
-    if (!user) return userName;
-    const profileName = user.user_metadata?.full_name as string | undefined;
-    const emailName = user.email?.split("@")[0];
-    const nextName = profileName || emailName || t("지원자", "Applicant");
-    setUserName(nextName);
-    return nextName;
   };
 
-  const applyToPosting = async (posting: VirtualPosting) => {
-    if (!isPostingOpen(posting.deadline)) {
-      setVirtualPostings((prev) => openPostingsOnly(prev));
-      void loadVirtualPostings();
-      setMessage(t("마감된 공고입니다. 다른 공고를 선택해 주세요.", "This posting is closed. Please choose another one."));
-      return;
-    }
+  const moveToDifferentQuestion = () => {
+    const nextPhase: Extract<InterviewPhase, "behavioral" | "technical"> =
+      phase === "behavioral" ? "technical" : phase === "technical" ? "behavioral" : "behavioral";
+    const candidates = interviewQuestions.filter((q) => q.phase === nextPhase);
+    const nextQuestion = candidates[(questionIndex + 1) % candidates.length];
+    const globalIndex = interviewQuestions.findIndex((q) => q.question === nextQuestion.question);
 
-    const currentUserName = await fetchUserName();
-    setMessage("");
-
-    const humanApplicants = Math.max(0, Math.min(MAX_CAPACITY - 1, posting.humanApplicants));
-    const aiCount = MAX_CAPACITY - (humanApplicants + 1);
-
-    const candidates: Candidate[] = [
-      {
-        id: "user-0",
-        name: currentUserName || userName || t("지원자", "Applicant"),
-        kind: "user",
-        resumeScore: randomInt(65, 88),
-        essayScore: 0,
-        interviewScore: 0,
-        totalScore: 0,
-      },
-    ];
-
-    for (let i = 0; i < humanApplicants; i++) {
-      candidates.push({
-        id: `human-${i + 1}`,
-        name: isEn ? `Applicant_${i + 1}` : `지원자_${i + 1}`,
-        kind: "human",
-        resumeScore: randomInt(55, 90),
-        essayScore: randomInt(48, 90),
-        interviewScore: randomInt(45, 90),
-        totalScore: 0,
-      });
-    }
-
-    for (let i = 0; i < aiCount; i++) {
-      candidates.push({
-        id: `ai-${i + 1}`,
-        name: genAiName(i),
-        kind: "ai",
-        resumeScore: randomInt(50, 86),
-        essayScore: randomInt(45, 85),
-        interviewScore: randomInt(40, 85),
-        totalScore: 0,
-      });
-    }
-
-    const sorted = [...candidates].sort((a, b) => b.resumeScore - a.resumeScore);
-    const docPass = sorted.slice(0, 5);
-
-    setActivePosting(posting);
-    setAllCandidates(candidates);
-    setDocPassCandidates(docPass);
-    setEssayAnswer("");
-    setEssaySubmitted(false);
-    setInterviewPlan(null);
-    setInterviewEval(null);
-    setStage("docs");
-    setMessage(
-      t(
-        `${posting.title.ko} 참여 신청 완료. 전형을 시작합니다. (서류 합격: ${docPass.length}/${MAX_CAPACITY})`,
-        `${posting.title.en} application submitted. Process started. (Document pass: ${docPass.length}/${MAX_CAPACITY})`,
-      ),
-    );
-  };
-
-  const startInterview = async () => {
-    if (!activePosting) return;
-    setLoading(true);
-    setMessage("");
-    setTimeLeft(120);
+    setQuestionIndex(globalIndex >= 0 ? globalIndex : 0);
+    setPhase(nextPhase);
+    setCurrentQuestion(nextQuestion.question);
+    setCurrentRubric(nextQuestion.rubric);
     setAnswer("");
-    setInterviewEval(null);
-    setSubmitted(false);
-
-    const res = await fetch("/api/simulator", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "question",
-        targetRole: isEn ? activePosting.role.en : activePosting.role.ko,
-        level: isEn ? "junior" : "주니어",
-        language,
-      }),
-    });
-    const json = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setMessage(json.error ?? t("면접 질문 생성에 실패했습니다.", "Failed to generate interview question."));
-      return;
-    }
-
-    setInterviewPlan({
-      question: String(json.question ?? ""),
-      rubric: Array.isArray(json.rubric) ? json.rubric.map(String) : [],
-      followUps: Array.isArray(json.followUps) ? json.followUps.map(String) : [],
-      expectedSignals: Array.isArray(json.expectedSignals) ? json.expectedSignals.map(String) : [],
-      timeLimitSec: typeof json.timeLimitSec === "number" ? json.timeLimitSec : 120,
-    });
-    setTimeLeft(typeof json.timeLimitSec === "number" ? json.timeLimitSec : 120);
-    setStage("interview");
+    setResult(null);
+    setFollowUpQuestion("");
+    setLastEvaluatedKey("");
   };
 
-  const submitEssayAndMoveToInterview = async () => {
-    if (!activePosting) return;
-    const trimmed = essayAnswer.trim();
-    if (trimmed.length < 120) {
-      setMessage(t("자소서는 120자 이상 작성해 주세요.", "Please write at least 120 characters."));
-      return;
-    }
-
-    const estimatedScore = Math.max(40, Math.min(95, Math.round(55 + Math.min(40, trimmed.length / 20))));
-    const updated = docPassCandidates.map((candidate) => {
-      if (candidate.kind !== "user") return candidate;
-      return { ...candidate, essayScore: estimatedScore };
-    });
-    setDocPassCandidates(updated);
-    setEssaySubmitted(true);
-    setMessage(
-      t(
-        `자소서 제출 완료 (평가 점수: ${estimatedScore}점). 면접을 시작합니다.`,
-        `Essay submitted (score: ${estimatedScore}). Starting interview stage.`,
-      ),
-    );
-
-    await startInterview();
+  const answerFollowUp = () => {
+    if (!followUpQuestion) return;
+    setCurrentQuestion(followUpQuestion);
+    setCurrentRubric([t("구체성", "Specificity"), t("증거", "Evidence"), t("회고", "Reflection"), t("다음 행동", "Next action")]);
+    setPhase("followup");
+    setAnswer("");
+    setResult(null);
+    setFollowUpQuestion("");
+    setLastEvaluatedKey("");
   };
 
-  const evaluateInterview = async (autoSubmit = false) => {
-    if (!activePosting || submitted || !interviewPlan) return;
-
-    if (!answer.trim()) {
-      if (autoSubmit) {
-        setMessage(t("시간 종료로 빈 답변이 자동 제출되었습니다.", "Time is up. Empty answer was auto-submitted."));
-      } else {
-        setMessage(t("면접 답변을 입력해 주세요.", "Please enter your interview answer."));
-        return;
-      }
-    }
-
-    if (loading) return;
-
-    setSubmitted(true);
-    setLoading(true);
-    setMessage("");
-
-    const res = await fetch("/api/simulator", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "evaluate",
-        targetRole: isEn ? activePosting.role.en : activePosting.role.ko,
-        question: interviewPlan.question,
-        rubric: interviewPlan.rubric,
-        answer,
-        language,
-      }),
-    });
-    const json = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setMessage(json.error ?? t("면접 평가에 실패했습니다.", "Failed to evaluate interview answer."));
-      return;
-    }
-
-    setInterviewEval(json as InterviewEval);
-
-    const updatedFinalists = docPassCandidates.map((candidate) => {
-      if (candidate.kind === "user") {
-        const total = Math.round(candidate.resumeScore * 0.4 + candidate.essayScore * 0.2 + (json.score as number) * 0.4);
-        return { ...candidate, interviewScore: json.score as number, totalScore: total };
-      }
-      const total = Math.round(candidate.resumeScore * 0.4 + candidate.essayScore * 0.2 + candidate.interviewScore * 0.4);
-      return { ...candidate, totalScore: total };
-    });
-
-    const ranked = [...updatedFinalists].sort((a, b) => b.totalScore - a.totalScore);
-    const hireCount = ranked.length > 1 && ranked[0].totalScore - ranked[1].totalScore < 4 ? 2 : 1;
-
-    setFinalHires(ranked.slice(0, hireCount));
-    setDocPassCandidates(updatedFinalists);
-    setStage("result");
+  const resetSession = () => {
+    setQuestionIndex(0);
+    setPhase("intro");
+    setCurrentQuestion(interviewQuestions[0].question);
+    setCurrentRubric(interviewQuestions[0].rubric);
+    setAnswer("");
+    setResult(null);
+    setHistory([]);
+    setFollowUpQuestion("");
+    setLastEvaluatedKey("");
   };
-
-  useEffect(() => {
-    if (stage !== "interview" || submitted || !interviewPlan) return;
-    let autoSubmitted = false;
-
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (!autoSubmitted) {
-            autoSubmitted = true;
-            setTimeout(() => {
-              void evaluateInterview(true);
-            }, 0);
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, submitted, interviewPlan]);
 
   return (
-    <div className="app-bg px-4 py-8">
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="surface-card p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">AI Process Simulator</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">{t("가상 채용 도전", "Mock Hiring Challenge")}</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            {t(
-              "공고와 마감일은 플랫폼이 설정합니다. 원하는 공고를 선택해 실전처럼 전형을 진행해 보세요.",
-              "Postings and deadlines are platform-defined. Choose one and run through a realistic hiring flow.",
-            )}
-          </p>
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Link href="/" className="secondary-btn px-3 py-2 text-sm">
-              {t("홈", "Home")}
-            </Link>
-            <Link href="/dashboard" className="secondary-btn px-3 py-2 text-sm">
+    <PageShell maxWidth="max-w-7xl">
+      <PageHeader
+        eyebrow={t("면접 시뮬레이터", "Interview Simulator")}
+        title={t("실전 면접 세션을 연습하세요.", "Practice a realistic interview session flow.")}
+        description={t(
+          "질문 → 답변 → 평가 → 심화 → 세션 요약으로 이어지는 구조화된 면접 루프를 경험합니다.",
+          "Move from question to answer, evaluation, follow-up, and session summary using local scoring for now.",
+        )}
+        actions={
+          <>
+            <Link href="/dashboard" className="secondary-btn px-4 py-2 text-sm">
               {t("대시보드", "Dashboard")}
             </Link>
+            <button type="button" onClick={resetSession} className="secondary-btn px-4 py-2 text-sm">
+              {t("세션 초기화", "Reset session")}
+            </button>
+          </>
+        }
+      />
+
+      <section className="mb-5">
+        <div className="path-route">
+          {phaseFlow.map((item, index) => {
+            const activeIndex = phaseFlow.indexOf(phase);
+            const isActive = item === phase;
+            const isComplete = index < activeIndex;
+            return (
+              <div key={item} className={`path-step ${isActive ? "border-[color-mix(in_srgb,var(--accent-2)_46%,var(--line))]" : ""}`}>
+                <div className="flex items-center gap-3">
+                  <span className="path-dot">{isComplete ? "✓" : index + 1}</span>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{phaseLabel[item]}</p>
+                    <p className="text-xs text-[var(--muted)]">{isActive ? t("진행 중", "Live phase") : isComplete ? t("완료", "Completed") : t("대기", "Queued")}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="mb-5 overflow-hidden rounded-2xl border border-[var(--line)] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--background)_92%,black),color-mix(in_srgb,var(--accent)_34%,var(--background))_54%,color-mix(in_srgb,var(--accent-2)_34%,var(--background)))] p-5 text-[var(--foreground)] shadow-[var(--shadow)] sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr] lg:items-end">
+          <div>
+            <div className="flex flex-wrap gap-2">
+              <span className="accent-pill px-3 py-1 text-xs font-medium backdrop-blur">
+                {t("라이브 연습", "Live practice")}
+              </span>
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${sessionStats.readiness.className}`}>
+                {sessionStats.readiness.label}
+              </span>
+            </div>
+            <h2 className="mt-4 max-w-3xl text-3xl font-semibold leading-tight sm:text-4xl">
+              {t("압박을 시뮬레이션하고, 신호를 날카롭게 만드세요.", "Simulate the pressure, sharpen the signal.")}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-strong)]">
+              {t(
+                "페이즈 추적, 규칙 기반 심화 질문, 세션 분석을 통해 답변이 얼마나 구체화되고 있는지 확인하세요.",
+                "Work through a structured interview loop with phase tracking, rule-based follow-ups, and session analytics that show whether your answers are becoming more concrete.",
+              )}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 backdrop-blur">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--muted)]">{t("세션 점수", "Session score")}</p>
+                <p className="mt-2 text-4xl font-semibold">{history.length > 0 ? `${sessionStats.averageScore}%` : "--"}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-[var(--muted)]">{t("답변 수", "Answered")}</p>
+                <p className="mt-1 text-2xl font-semibold">{sessionStats.totalAnswered}</p>
+              </div>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--surface)]">
+              <div className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-2))] transition-all duration-300" style={{ width: `${progressWidth}%` }} />
+            </div>
+            <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{sessionStats.strongestArea}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
+        <PagePanel className="overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <SectionTitle title={t("현재 질문", "Current question")} description={phaseDescription[phase]} />
+            <span className="inline-flex w-fit rounded-full border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-3 py-1 text-xs font-medium text-[var(--accent-2)]">
+              {phaseLabel[phase]}
+            </span>
           </div>
 
-          {stage === "jobs" && (
-            <div className="mt-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">{t("AI 가상 공고 목록", "AI Mock Posting List")}</h2>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {sourceLabel(postingsSource)} · {t("마감된 공고는 자동 제외됩니다.", "Closed postings are removed automatically.")}
-                    {postingsGeneratedAt ? ` · ${new Date(postingsGeneratedAt).toLocaleString(isEn ? "en-US" : "ko-KR")}` : ""}
-                  </p>
+          <div className="mt-5 rounded-2xl border border-[var(--line)] bg-gradient-to-br from-[var(--surface-strong)] to-[var(--surface)] p-5">
+            <p className="text-xl font-medium leading-8 text-[var(--foreground)]">{currentQuestion}</p>
+          </div>
+
+          <div className="mt-5">
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-[var(--muted)]">{t("평가 기준", "Rubric")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {currentRubric.map((item) => (
+                <span key={item} className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--muted-strong)]">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 text-sm text-[var(--muted-strong)] sm:grid-cols-3">
+            <div>
+              <p className="font-medium text-[var(--foreground)]">{t("페이즈", "Phase")}</p>
+              <p className="mt-1">{phaseLabel[phase]}</p>
+            </div>
+            <div>
+              <p className="font-medium text-[var(--foreground)]">{t("질문 수", "Question bank")}</p>
+              <p className="mt-1">{interviewQuestions.length} {t("개", "prompts")}</p>
+            </div>
+            <div>
+              <p className="font-medium text-[var(--foreground)]">{t("모드", "Mode")}</p>
+              <p className="mt-1">{t("로컬 채점", "Local scoring")}</p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={moveToDifferentQuestion} className="secondary-btn px-4 py-2 text-sm">
+              {t("다른 질문", "Different question")}
+            </button>
+            <button type="button" onClick={resetSession} className="secondary-btn px-4 py-2 text-sm">
+              {t("세션 초기화", "Reset session")}
+            </button>
+          </div>
+        </PagePanel>
+
+        <PagePanel className="border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.08)] backdrop-blur">
+          <SectionTitle title={t("답변 작성", "Answer workspace")} description={t("답변을 작성하고 평가한 후 심화 질문으로 이어가세요.", "Draft your response, evaluate it, then continue into the follow-up.")} />
+
+          <label className="mt-5 block">
+            <span className="mb-2 block text-sm font-medium text-[var(--foreground)]">{t("내 답변", "Your answer")}</span>
+            <textarea
+              value={answer}
+              onChange={(event) => {
+                setAnswer(event.target.value);
+                if (result) {
+                  setResult(null);
+                  setFollowUpQuestion("");
+                }
+              }}
+              className="field min-h-64 resize-y"
+              placeholder={t("상황, 역할, 행동, 결과, 정량적 임팩트를 포함해 작성하세요.", "Use situation, role, action, result, and measurable impact.")}
+            />
+          </label>
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={evaluate} className="primary-btn px-4 py-2 text-sm" disabled={!answer.trim()}>
+              {t("답변 평가", "Evaluate answer")}
+            </button>
+            {followUpQuestion ? (
+              <button type="button" onClick={answerFollowUp} className="secondary-btn px-4 py-2 text-sm">
+                {t("심화 질문 답하기", "Answer follow-up")}
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mt-6">
+            <SectionTitle title={t("평가 결과", "Evaluation")} description={t("구조, 구체성, 임팩트 기반 로컬 신호입니다.", "A quick local signal based on structure, specificity, and impact.")} />
+            {result ? (
+              <div className="mt-4 grid gap-4 xl:grid-cols-[0.36fr_0.64fr]">
+                <MetricTile label={t("점수", "Score")} value={`${result.score}%`} helper={result.summary} />
+                <div className="space-y-3">
+                  <Notice tone="success">
+                    <strong>{t("강점: ", "Strengths: ")}</strong>
+                    {result.strengths.join(" ")}
+                  </Notice>
+                  <Notice tone="warning">
+                    <strong>{t("개선: ", "Improve: ")}</strong>
+                    {result.improvements.join(" ")}
+                  </Notice>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void loadVirtualPostings()}
-                  disabled={postingsLoading}
-                  className="secondary-btn px-3 py-2 text-sm disabled:opacity-60"
-                >
-                  {postingsLoading ? t("생성 중...", "Generating...") : t("새 가상 공고 생성", "Generate new postings")}
-                </button>
-              </div>
-
-              {postingsLoading && (
-                <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  {t("실전형 가상 공고를 생성하는 중입니다...", "Generating realistic mock postings...")}
-                </p>
-              )}
-
-              {!postingsLoading && postingsMessage && (
-                <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{postingsMessage}</p>
-              )}
-
-              {!postingsLoading && virtualPostings.length > 0 && (
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {virtualPostings.map((posting) => {
-                    const aiFill = Math.max(0, MAX_CAPACITY - Math.min(MAX_CAPACITY, posting.humanApplicants + 1));
-                    return (
-                      <div key={posting.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{isEn ? posting.title.en : posting.title.ko}</p>
-                            <p className="text-xs text-slate-600">
-                              {posting.company} · {isEn ? posting.location.en : posting.location.ko}
-                            </p>
-                          </div>
-                          <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700">
-                            {t("모집중", "Open")}
-                          </span>
+                <div className="xl:col-span-2">
+                  <div className="content-card grid gap-3 p-4 sm:grid-cols-2">
+                    {answerDimensions(result).map((dimension) => (
+                      <div key={dimension.label}>
+                        <div className="mb-2 flex justify-between text-xs font-semibold text-[var(--muted)]">
+                          <span>{dimension.label}</span>
+                          <span>{dimension.value}%</span>
                         </div>
-                        <p className="mt-2 text-sm text-slate-700">{isEn ? posting.description.en : posting.description.ko}</p>
-                        <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-                          <div className="rounded-md bg-slate-50 p-2 text-slate-700">
-                            {t("마감일", "Deadline")}: {formatDeadline(posting.deadline, language)}
-                          </div>
-                          <div className="rounded-md bg-slate-50 p-2 text-slate-700">
-                            {t("경쟁 풀", "Candidate pool")}: {MAX_CAPACITY}
-                            {t("명", " applicants")} ({t("현재 지원자", "Current applicants")} {posting.humanApplicants}
-                            {t("명, AI 보정", ", AI fillers")} {aiFill}
-                            {t("명", "")})
-                          </div>
+                        <div className="signal-bar">
+                          <div className="signal-fill" style={{ width: `${dimension.value}%` }} />
                         </div>
-                        {posting.requirements.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-xs font-semibold text-slate-900">{t("요구사항", "Requirements")}</p>
-                            <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
-                              {posting.requirements.map((item) => (
-                                <li key={`${posting.id}-req-${item.ko}-${item.en}`}>{isEn ? item.en : item.ko}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {posting.screeningFocus.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {posting.screeningFocus.map((item) => (
-                              <span key={`${posting.id}-focus-${item.ko}-${item.en}`} className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
-                                {isEn ? item.en : item.ko}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => void applyToPosting(posting)}
-                          className="primary-btn mt-3 px-4 py-2 text-sm"
-                        >
-                          {t("참여 신청", "Apply")}
-                        </button>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {stage === "docs" && activePosting && (
-            <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">{t("1단계. 서류 전형", "Stage 1. Document Screening")}</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                {t("공고", "Posting")}: {isEn ? activePosting.title.en : activePosting.title.ko} | {t("마감일", "Deadline")}: {formatDeadline(activePosting.deadline, language)} | {t("모집 풀", "Candidate pool")}: {MAX_CAPACITY}
-              </p>
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {allCandidates
-                  .slice()
-                  .sort((a, b) => b.resumeScore - a.resumeScore)
-                  .map((candidate) => (
-                    <div key={candidate.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
-                      <p className="font-semibold text-slate-900">
-                        {candidate.name} {candidate.kind === "user" ? `(${t("나", "Me")})` : candidate.kind === "ai" ? "(AI)" : ""}
-                      </p>
-                      <p className="text-slate-600">
-                        {t("서류 점수", "Document score")}: {candidate.resumeScore}
-                      </p>
-                    </div>
-                  ))}
-              </div>
-              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-                {t("면접 진출자", "Interview finalists")}: {docPassCandidates.map((c) => c.name).join(", ")}
-              </div>
-              <button
-                onClick={() => {
-                  setStage("essay");
-                  setMessage("");
-                }}
-                className="primary-btn mt-3 px-4 py-2 text-sm"
-              >
-                {t("2단계 자소서 작성", "Proceed to Stage 2: Essay")}
-              </button>
-            </div>
-          )}
-
-          {stage === "essay" && activePosting && (
-            <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">{t("2단계. 자소서 제출", "Stage 2. Essay Submission")}</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                {t(
-                  `문항: ${activePosting.company} ${activePosting.role.ko} 직무에 지원한 이유와 본인의 강점을 작성해 주세요. (최소 120자)`,
-                  `Prompt: Why are you applying to the ${activePosting.role.en} role at ${activePosting.company}, and what are your key strengths? (minimum 120 chars)`,
-                )}
-              </p>
-              <textarea
-                value={essayAnswer}
-                onChange={(e) => setEssayAnswer(e.target.value)}
-                className="field mt-3 min-h-36"
-                placeholder={t("지원 동기, 직무 역량, 프로젝트 경험을 중심으로 작성해 주세요.", "Focus on motivation, role fit, and project evidence.")}
-                disabled={loading || essaySubmitted}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                {t("현재 글자 수", "Current length")}: {essayAnswer.trim().length}
-              </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={submitEssayAndMoveToInterview}
-                  disabled={loading || essaySubmitted}
-                  className="primary-btn px-4 py-2 text-sm disabled:opacity-60"
-                >
-                  {loading ? t("다음 단계 준비 중...", "Preparing next stage...") : t("자소서 제출 후 면접 시작", "Submit essay and start interview")}
-                </button>
-                <button type="button" onClick={() => setStage("docs")} className="secondary-btn px-4 py-2 text-sm">
-                  {t("이전 단계", "Back")}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {stage === "interview" && activePosting && interviewPlan && (
-            <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">{t("3단계. AI 면접", "Stage 3. AI Interview")}</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                {t("직무", "Role")}: {isEn ? activePosting.role.en : activePosting.role.ko} | {t("남은 시간", "Time left")}: {timeLeft}
-                {t("초 (0초 시 자동 제출)", " sec (auto-submit at 0)")}
-              </p>
-              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">{t("핵심 질문", "Primary Question")}</p>
-                <p className="mt-1 text-sm text-slate-700">{interviewPlan.question}</p>
-
-                {interviewPlan.followUps.length > 0 && (
-                  <>
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{t("후속 질문", "Follow-ups")}</p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
-                      {interviewPlan.followUps.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-
-                {interviewPlan.rubric.length > 0 && (
-                  <>
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{t("평가 루브릭", "Rubric")}</p>
-                    <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
-                      {interviewPlan.rubric.map((r) => (
-                        <li key={r}>{r}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-
-                {interviewPlan.expectedSignals.length > 0 && (
-                  <>
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{t("면접관 기대 시그널", "Expected Signals")}</p>
-                    <div className="mt-1 flex flex-wrap gap-2">
-                      {interviewPlan.expectedSignals.map((s) => (
-                        <span key={s} className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-              <textarea
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                className="field mt-3 min-h-32"
-                placeholder={t("면접 답변을 입력해 주세요.", "Write your interview answer here.")}
-                disabled={loading || submitted}
-              />
-              <button
-                onClick={() => void evaluateInterview(false)}
-                disabled={loading || submitted}
-                className="primary-btn mt-3 px-4 py-2 text-sm disabled:opacity-60"
-              >
-                {loading ? t("평가 중...", "Evaluating...") : t("답변 제출", "Submit Answer")}
-              </button>
-            </div>
-          )}
-
-          {stage === "result" && (
-            <div className="mt-5">
-              <h2 className="text-lg font-semibold text-slate-900">{t("4단계. 최종 결과", "Stage 4. Final Result")}</h2>
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {docPassCandidates
-                  .slice()
-                  .sort((a, b) => b.totalScore - a.totalScore)
-                  .map((candidate, idx) => (
-                    <div key={candidate.id} className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
-                      <p className="font-semibold text-slate-900">
-                        {idx + 1}. {candidate.name} {candidate.kind === "user" ? `(${t("나", "Me")})` : candidate.kind === "ai" ? "(AI)" : ""}
-                      </p>
-                      <p className="text-slate-600">
-                        {t("서류", "Docs")} {candidate.resumeScore} / {t("자소서", "Essay")} {candidate.essayScore} / {t("면접", "Interview")} {candidate.interviewScore} / {t("종합", "Total")} {candidate.totalScore}
-                      </p>
-                    </div>
-                  ))}
-              </div>
-
-              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                {t("최종 합격(1~2명)", "Final selected (1-2)")}: {finalHires.map((c) => c.name).join(", ")}
-              </div>
-
-              {interviewEval && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
-                  <p className="font-semibold text-slate-900">
-                    {t("내 면접 점수", "Interview score")}: {interviewEval.score}
-                  </p>
-                  <p className="mt-1 text-slate-700">{interviewEval.summary}</p>
-                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                    {t("채용 시그널", "Hiring Signal")}: {interviewSignalLabel[interviewEval.hiringSignal]}
-                  </p>
-
-                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-                    <div className="rounded-md bg-slate-50 p-2 text-slate-700">{t("문제 해결", "Problem Solving")}: {interviewEval.categoryScores.problemSolving}</div>
-                    <div className="rounded-md bg-slate-50 p-2 text-slate-700">{t("기술 깊이", "Technical Depth")}: {interviewEval.categoryScores.technicalDepth}</div>
-                    <div className="rounded-md bg-slate-50 p-2 text-slate-700">{t("커뮤니케이션", "Communication")}: {interviewEval.categoryScores.communication}</div>
-                    <div className="rounded-md bg-slate-50 p-2 text-slate-700">{t("성과 임팩트", "Impact")}: {interviewEval.categoryScores.impact}</div>
-                  </div>
-
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{t("강점", "Strengths")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
-                        {interviewEval.strengths.map((s) => (
-                          <li key={`s-${s}`}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{t("보완점", "Improvements")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
-                        {interviewEval.improvements.map((i) => (
-                          <li key={`i-${i}`}>{i}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-slate-900">{t("다음 액션", "Next Actions")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
-                        {interviewEval.nextStepAdvice.map((a) => (
-                          <li key={`a-${a}`}>{a}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              )}
+              </div>
+            ) : (
+              <EmptyState>{t("답변을 작성하고 평가하면 점수, 강점, 개선점이 표시됩니다.", "Write an answer and evaluate it to see score, strengths, and improvement points.")}</EmptyState>
+            )}
+          </div>
 
-              <button
-                onClick={() => {
-                  setStage("jobs");
-                  setActivePosting(null);
-                }}
-                className="secondary-btn mt-3 px-4 py-2 text-sm"
-                type="button"
-              >
-                {t("공고 목록으로 돌아가기", "Back to posting list")}
-              </button>
+          {followUpQuestion ? (
+            <div className="mt-5 rounded-2xl border border-[var(--line)] bg-gradient-to-br from-[color-mix(in_srgb,var(--accent)_14%,transparent)] to-[var(--surface)] p-4 shadow-[0_12px_30px_rgba(10,102,194,0.08)]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.06em] text-[var(--accent-2)]">{t("심화 질문", "Follow-up question")}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{followUpQuestion}</p>
+                </div>
+                <span className="w-fit rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--accent-2)]">
+                  {t("다음 단계", "Next step")}
+                </span>
+              </div>
             </div>
-          )}
+          ) : null}
+        </PagePanel>
+      </section>
 
-          {message && <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</p>}
-        </div>
-      </div>
-    </div>
+      <section className="mt-5 grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
+        <PagePanel className="border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <SectionTitle title={t("세션 분석", "Session analytics")} description={t("현재 면접 세션의 요약 신호입니다.", "Compact signals for the current interview run.")} />
+            <span className={`w-fit rounded-full border px-3 py-1 text-xs font-medium ${sessionStats.readiness.className}`}>
+              {sessionStats.readiness.label}
+            </span>
+          </div>
+
+          {history.length > 0 ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <MetricTile label={t("답변 수", "Answered")} value={sessionStats.totalAnswered} helper={t("평가된 답변", "Evaluated responses")} />
+              <MetricTile label={t("평균", "Average")} value={`${sessionStats.averageScore}%`} helper={sessionStats.strongestArea} />
+              <MetricTile label={t("최근", "Latest")} value={`${sessionStats.latestScore}%`} helper={t("가장 최근 점수", "Most recent score")} />
+            </div>
+          ) : (
+            <EmptyState>{t("아직 평가된 답변이 없습니다. 첫 번째 질문으로 세션을 시작하세요.", "No answers evaluated yet. Start with the first question to build a session summary.")}</EmptyState>
+          )}
+        </PagePanel>
+
+        <PagePanel className="border border-[var(--line)] bg-[var(--surface)] shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
+          <SectionTitle title={t("최근 답변 히스토리", "Recent answer history")} description={t("이번 세션에서 평가된 최근 3개 답변입니다.", "Latest 3 evaluated answers in this session.")} />
+          {history.length > 0 ? (
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              {history.slice(0, 3).map((item, index) => (
+                <article key={`${item.timestamp}-${item.result.score}`} className="rounded-2xl border border-[var(--line)] bg-gradient-to-br from-[var(--surface-strong)] to-[var(--surface)] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs font-medium text-[var(--muted)]">
+                      #{history.length - index}
+                    </span>
+                    <span className="shrink-0 rounded-full border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-2 py-1 text-xs font-medium text-[var(--accent-2)]">
+                      {item.result.score}%
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm font-medium leading-6 text-[var(--foreground)]">{shorten(item.question, 84)}</p>
+                  <p className="mt-3 text-xs leading-5 text-[var(--muted)]">{new Date(item.timestamp).toLocaleString(isEn ? "en-US" : "ko-KR")}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState>{t("평가 후 이전 질문과 점수가 여기 표시됩니다.", "Previous questions and scores will appear here after evaluation.")}</EmptyState>
+          )}
+        </PagePanel>
+      </section>
+    </PageShell>
   );
 }

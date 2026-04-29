@@ -2,7 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
 
 type CoverLetterItem = {
@@ -40,8 +41,8 @@ export default function CoverLetterPage() {
 
   const getAuthHeader = useCallback(async () => {
     if (!supabase || !isSupabaseConfigured) return "";
-    const { data } = await supabase.auth.getSession();
-    const accessToken = data.session?.access_token;
+    const session = await getSessionWithRetry();
+    const accessToken = session?.access_token;
     return accessToken ? `Bearer ${accessToken}` : "";
   }, []);
 
@@ -133,25 +134,29 @@ export default function CoverLetterPage() {
   };
 
   return (
-    <div className="app-bg px-4 py-8">
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="surface-card p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">AI Cover Letter</p>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">{t("AI 커버레터 생성", "AI Cover Letter Generator")}</h1>
-          <p className="mt-2 text-sm text-slate-600">{t("이력서 텍스트를 입력하면 GPT 기반으로 커버레터 초안을 생성하고 저장합니다.", "Generate and save a GPT-based cover letter draft from your resume text.")}</p>
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+    <PageShell maxWidth="max-w-7xl">
+      <PageHeader
+        eyebrow="AI Writing Workspace"
+        title={t("AI 커버레터 생성", "AI Cover Letter Generator")}
+        description={t("이력서와 공고 맥락을 넣고 지원 문서를 빠르게 생성, 비교, 재사용하세요.", "Generate, compare, and reuse application drafts from resume and job context.")}
+        actions={
+          <>
             <Link href="/dashboard" className="secondary-btn px-3 py-2 text-sm">
               {t("대시보드", "Dashboard")}
             </Link>
             <Link href="/profile" className="secondary-btn px-3 py-2 text-sm">
               {t("프로필 수정", "Edit profile")}
             </Link>
-          </div>
+          </>
+        }
+      />
 
-          <form className="mt-5 grid grid-cols-1 gap-3" onSubmit={generateCoverLetter}>
+      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <PagePanel>
+          <SectionTitle title={t("입력 컨텍스트", "Input context")} description={t("지원자의 증거와 공고 요구사항을 분리해서 정리하세요.", "Separate candidate evidence from job requirements for a cleaner draft.")} />
+          <form className="mt-6 grid grid-cols-1 gap-4" onSubmit={generateCoverLetter}>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-900">{t("이력서 텍스트", "Resume Text")}</label>
+              <label className="form-label">{t("이력서 텍스트", "Resume Text")}</label>
               <textarea
                 value={resumeText}
                 onChange={(e) => setResumeText(e.target.value)}
@@ -161,7 +166,7 @@ export default function CoverLetterPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-900">{t("지원 직무/공고 설명", "Target Role / Job Description")}</label>
+              <label className="form-label">{t("지원 직무/공고 설명", "Target Role / Job Description")}</label>
               <textarea
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
@@ -170,7 +175,7 @@ export default function CoverLetterPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-900">{t("작성 톤", "Tone")}</label>
+              <label className="form-label">{t("작성 톤", "Tone")}</label>
               <select value={tone} onChange={(e) => setTone(e.target.value)} className="field">
                 {toneOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -186,28 +191,55 @@ export default function CoverLetterPage() {
             </div>
           </form>
 
-          {message && <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{message}</p>}
+          {message && <Notice className="mt-5">{message}</Notice>}
+        </PagePanel>
 
-          {generatedText && (
+        <PagePanel>
+          <SectionTitle title={t("생성 결과", "Generated Result")} description={t("편집 가능한 에디터 형태로 초안을 검토하세요.", "Review the draft in an editor-style output panel.")} />
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="content-card p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">Tone</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{toneOptions.find((option) => option.value === tone)?.label}</p>
+            </div>
+            <div className="content-card p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">Evidence</p>
+              <div className="signal-bar mt-3"><div className="signal-fill" style={{ width: `${Math.min(100, Math.max(12, resumeText.length / 8))}%` }} /></div>
+            </div>
+            <div className="content-card p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">JD Align</p>
+              <div className="signal-bar mt-3"><div className="signal-fill" style={{ width: `${jobDescription.trim() ? 78 : 18}%` }} /></div>
+            </div>
+          </div>
+          {generatedText ? (
             <div className="mt-5">
-              <p className="mb-1 text-sm font-semibold text-slate-900">{t("생성 결과", "Generated Result")}</p>
               <textarea value={generatedText} readOnly className="field min-h-52" />
             </div>
-          )}
-        </div>
-
-        <div className="surface-card mt-5 p-6">
-          <h2 className="text-lg font-semibold text-slate-900">{t("생성 히스토리", "Generation History")}</h2>
-          {loadingHistory ? (
-            <p className="mt-3 text-sm text-slate-600">{t("불러오는 중...", "Loading...")}</p>
-          ) : history.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-600">{t("아직 저장된 결과가 없습니다.", "No saved results yet.")}</p>
           ) : (
-            <div className="mt-3 space-y-3">
+            <EmptyState>{t("아직 생성된 초안이 없습니다. 왼쪽 컨텍스트를 입력하고 생성해 주세요.", "No draft yet. Add context on the left and generate a draft.")}</EmptyState>
+          )}
+          <div className="content-card mt-5 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--warning)]">{t("Missing evidence hints", "Missing evidence hints")}</p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-[var(--muted)]">
+              {!/\d/.test(resumeText) ? <li>{t("정량 성과 숫자를 추가하면 설득력이 좋아집니다.", "Add measurable numbers to strengthen credibility.")}</li> : null}
+              {!jobDescription.trim() ? <li>{t("공고 설명을 넣으면 JD alignment가 올라갑니다.", "Add the job description to improve JD alignment.")}</li> : null}
+              {resumeText.length < 300 ? <li>{t("프로젝트 역할과 결과를 더 구체화하세요.", "Add more detail about project role and outcomes.")}</li> : null}
+            </ul>
+          </div>
+        </PagePanel>
+      </div>
+
+      <PagePanel className="mt-5">
+          <SectionTitle title={t("생성 히스토리", "Generation History")} />
+          {loadingHistory ? (
+            <Notice className="mt-3">{t("불러오는 중...", "Loading...")}</Notice>
+          ) : history.length === 0 ? (
+            <EmptyState>{t("아직 저장된 결과가 없습니다.", "No saved results yet.")}</EmptyState>
+          ) : (
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
               {history.map((item) => (
-                <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs text-slate-500">{new Date(item.created_at).toLocaleString(isEn ? "en-US" : "ko-KR")}</p>
-                  <p className="mt-1 text-sm text-slate-700 line-clamp-2">{item.generated_text}</p>
+                <div key={item.id} className="content-card p-4">
+                  <p className="text-xs text-[var(--muted)]">{new Date(item.created_at).toLocaleString(isEn ? "en-US" : "ko-KR")}</p>
+                  <p className="mt-1 text-sm text-[var(--muted-strong)] line-clamp-2">{item.generated_text}</p>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <button onClick={() => handleReuse(item)} className="secondary-btn px-3 py-1.5 text-xs">
                       {t("불러와서 재생성", "Load and regenerate")}
@@ -217,8 +249,10 @@ export default function CoverLetterPage() {
               ))}
             </div>
           )}
-        </div>
-      </div>
-    </div>
+      </PagePanel>
+    </PageShell>
   );
 }
+
+
+

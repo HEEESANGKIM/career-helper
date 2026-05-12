@@ -250,8 +250,8 @@ export default function MatchingPage() {
         description={t("실공고, 경쟁 신호, 프로필 적합도를 하나의 대시보드에서 우선순위화합니다.", "Prioritize live postings, competition signals, and profile fit in one dashboard.")}
         actions={
           <>
-            <Link href="/profile" className="secondary-btn px-3 py-2 text-sm">
-              {t("프로필 수정", "Edit profile")}
+            <Link href="/settings" className="secondary-btn px-3 py-2 text-sm">
+              {t("설정에서 프로필 수정", "Edit profile in Settings")}
             </Link>
             <Link href="/dashboard" className="secondary-btn px-3 py-2 text-sm">
               {t("대시보드", "Dashboard")}

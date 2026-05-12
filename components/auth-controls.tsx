@@ -10,13 +10,11 @@ type Variant = "top" | "menu";
 
 const appNav = [
   { href: "/dashboard", labelKo: "대시보드", labelEn: "Dashboard" },
-  { href: "/matching", labelKo: "매칭", labelEn: "Match" },
-  { href: "/simulator", labelKo: "면접 연습", labelEn: "Drill" },
-  { href: "/cover-letter", labelKo: "지원서", labelEn: "Write" },
-  { href: "/interview/hiring-manager", labelKo: "취업 시뮬레이터", labelEn: "Hiring Simulator" },
-  { href: "/career-chess", labelKo: "체스", labelEn: "Chess" },
-  { href: "/background-check", labelKo: "체크", labelEn: "Check" },
-  { href: "/profile", labelKo: "프로필", labelEn: "Profile" },
+  { href: "/cover-letter", labelKo: "이력서 랩", labelEn: "Resume Lab" },
+  { href: "/hiring-simulator", labelKo: "채용 시뮬레이터", labelEn: "Hiring Simulator" },
+  { href: "/next-move", labelKo: "넥스트 무브", labelEn: "Next Move" },
+  { href: "/matching", labelKo: "채용 매칭", labelEn: "Job Match" },
+  { href: "/settings", labelKo: "설정", labelEn: "Settings" },
 ];
 
 export default function AuthControls({ variant = "top" }: { variant?: Variant }) {
@@ -58,7 +56,11 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
   const navLinks = appNav.map((item) => ({
     ...item,
     label: isKo ? item.labelKo : item.labelEn,
-    active: pathname === item.href || pathname.startsWith(`${item.href}/`),
+    active:
+      pathname === item.href ||
+      pathname.startsWith(`${item.href}/`) ||
+      (item.href === "/settings" && pathname.startsWith("/my-info")) ||
+      (item.href === "/next-move" && pathname.startsWith("/career-chess")),
   }));
 
   if (variant === "menu") {
@@ -69,20 +71,17 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
             {item.label}
           </Link>
         ))}
-        <Link className="secondary-btn flex w-full items-center justify-start px-3 py-2 text-left text-sm" href="/my-info">
-          Account
-        </Link>
         <button onClick={handleLogout} className="secondary-btn flex w-full items-center justify-start px-3 py-2 text-left text-sm">
-          Log out
+          {isKo ? "로그아웃" : "Log out"}
         </button>
       </>
     ) : (
       <>
         <Link className="secondary-btn flex w-full items-center justify-start px-3 py-2 text-left text-sm" href="/login">
-          Log in
+          {isKo ? "로그인" : "Log in"}
         </Link>
         <Link className="primary-btn flex w-full items-center justify-start px-3 py-2 text-left text-sm" href="/register">
-          Sign up
+          {isKo ? "회원가입" : "Sign up"}
         </Link>
       </>
     );
@@ -126,9 +125,6 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
           </Link>
         ))}
       </nav>
-      <Link href="/my-info" className="secondary-btn px-3 py-2 text-xs">
-        {isKo ? "계정" : "Account"}
-      </Link>
       <button onClick={handleLogout} className="secondary-btn px-3 py-2 text-xs">
         {isKo ? "로그아웃" : "Log out"}
       </button>
@@ -139,7 +135,7 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
         {isKo ? "로그인" : "Log in"}
       </Link>
       <Link href="/register" className="primary-btn px-3 py-2 text-xs">
-        {isKo ? "가입" : "Sign up"}
+        {isKo ? "회원가입" : "Sign up"}
       </Link>
     </div>
   );

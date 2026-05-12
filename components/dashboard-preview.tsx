@@ -2,41 +2,41 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { BriefcaseBusiness, FileText, GitBranch, ShieldCheck } from "lucide-react";
+import { BriefcaseBusiness, FileText, GitBranch, SearchCheck } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 
 const previewMetrics = [
   {
     icon: FileText,
-    labelKo: "이력서",
-    labelEn: "Resume",
+    labelKo: "Resume Lab",
+    labelEn: "Resume Lab",
     value: "86",
     bar: 86,
-    href: "/profile",
+    href: "/cover-letter",
   },
   {
     icon: BriefcaseBusiness,
-    labelKo: "면접",
-    labelEn: "Interview",
-    value: "72%",
-    bar: 72,
-    href: "/interview/hiring-manager",
+    labelKo: "Hiring Simulator",
+    labelEn: "Hiring Simulator",
+    value: "76",
+    bar: 76,
+    href: "/hiring-simulator",
   },
   {
     icon: GitBranch,
-    labelKo: "경로",
-    labelEn: "Path",
+    labelKo: "Next Move",
+    labelEn: "Next Move",
     value: "A",
-    bar: 64,
-    href: "/career-chess",
+    bar: 84,
+    href: "/next-move",
   },
   {
-    icon: ShieldCheck,
-    labelKo: "평판",
-    labelEn: "Background",
-    value: "91",
-    bar: 91,
-    href: "/background-check",
+    icon: SearchCheck,
+    labelKo: "Job Match",
+    labelEn: "Job Match",
+    value: "12",
+    bar: 72,
+    href: "/matching",
   },
 ];
 
@@ -107,7 +107,7 @@ export function DashboardPreview() {
           <span>{isEn ? "3 min" : "3분"}</span>
         </div>
         <p className="ko-friendly mt-2 text-sm leading-6 text-[var(--muted-strong)]">
-          {isEn ? "Run a strict simulation before the next application." : "다음 지원 전 시뮬레이션을 실행하세요."}
+          {isEn ? "Run Hiring Simulator, then compare your Next Move." : "Hiring Simulator를 실행한 뒤 Next Move에서 다음 선택지를 비교하세요."}
         </p>
       </div>
     </motion.div>

@@ -9,7 +9,7 @@ import { LanguageProvider } from "@/components/language-provider";
 
 export const metadata: Metadata = {
   title: "Pathmate.ai",
-  description: "Premium AI career cockpit for profiles, matching, documents, and interview practice.",
+  description: "Premium AI career cockpit for Resume Lab, Hiring Simulator, Next Move, and Job Match.",
 };
 
 const themeInitScript = `

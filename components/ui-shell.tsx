@@ -131,13 +131,11 @@ export function EmptyState({ children }: { children: ReactNode }) {
 
 const navSteps = [
   { labelKo: "대시보드", labelEn: "Dashboard", href: "/dashboard", icon: "00" },
-  { labelKo: "프로필", labelEn: "Profile", href: "/profile", icon: "01" },
-  { labelKo: "매칭", labelEn: "Match", href: "/matching", icon: "02" },
-  { labelKo: "면접 연습", labelEn: "Drill", href: "/simulator", icon: "03" },
-  { labelKo: "지원서", labelEn: "Apply", href: "/cover-letter", icon: "04" },
-  { labelKo: "취업 시뮬레이터", labelEn: "Hiring Simulator", href: "/interview/hiring-manager", icon: "05" },
-  { labelKo: "체스", labelEn: "Chess", href: "/career-chess", icon: "06" },
-  { labelKo: "체크", labelEn: "Check", href: "/background-check", icon: "07" },
+  { labelKo: "이력서 랩", labelEn: "Resume Lab", href: "/cover-letter", icon: "01" },
+  { labelKo: "채용 시뮬레이터", labelEn: "Hiring Simulator", href: "/hiring-simulator", icon: "02" },
+  { labelKo: "넥스트 무브", labelEn: "Next Move", href: "/next-move", icon: "03" },
+  { labelKo: "채용 매칭", labelEn: "Job Match", href: "/matching", icon: "04" },
+  { labelKo: "설정", labelEn: "Settings", href: "/settings", icon: "05" },
 ];
 
 function CockpitRail() {
@@ -168,7 +166,11 @@ function CockpitRail() {
 
       <nav className="cockpit-rail-nav" aria-label="Career workflow">
         {navSteps.map((step) => {
-          const isActive = pathname === step.href || pathname.startsWith(`${step.href}/`);
+          const isActive =
+            pathname === step.href ||
+            pathname.startsWith(`${step.href}/`) ||
+            (step.href === "/settings" && pathname.startsWith("/my-info")) ||
+            (step.href === "/next-move" && pathname.startsWith("/career-chess"));
           return (
             <Link key={step.href} href={step.href} className={`cockpit-nav-item${isActive ? " cockpit-nav-item--active" : ""}`}>
               <span className="cockpit-nav-icon">{step.icon}</span>

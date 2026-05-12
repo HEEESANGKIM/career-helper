@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
   const planFallback = fallbackPlan(language);
 
   const prompt = [
-    "You are PathMate.ai Career Chess, an interactive career strategy simulator for students, new graduates, interns, entry-level job seekers, and career switchers.",
+    "You are PathMate.ai Next Move, an AI career strategy board for students, new graduates, interns, entry-level job seekers, and career switchers.",
     "Hide technical simulation complexity. Do not mention Monte Carlo. Be practical, action-oriented, and easy to understand.",
     "Avoid fake precise probabilities. Use qualitative Low/Medium/High labels.",
     `Return JSON only in ${languageName(language)}.`,

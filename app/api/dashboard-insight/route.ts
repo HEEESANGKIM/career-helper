@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { getSyntheticProfiles, type SyntheticCareerProfile } from "@/lib/career-data";
 
 export const runtime = "nodejs";
 
@@ -18,33 +18,37 @@ type ProfileRow = {
   internship_count?: number | null;
   project_count?: number | null;
   target_role?: string | null;
+  target_industry?: string | null;
+  preferred_location?: string | null;
+  portfolio_url?: string | null;
+  github_url?: string | null;
   experience_summary?: string | null;
 };
 
-type CoverLetterRow = {
-  resume_text?: string | null;
-  job_description?: string | null;
-  generated_text?: string | null;
+type EvaluationScores = {
+  profileCompleteness: number;
+  marketReadiness: number;
+  interviewReadiness: number;
+  portfolioStrength: number;
+};
+
+type Penalty = {
+  id: string;
+  label: string;
+  labelKo: string;
+  points: number;
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-
 const isConfigured = Boolean(supabaseUrl && supabaseAnonKey && supabaseServiceRoleKey);
-const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
+const serviceClient = isConfigured ? createClient(supabaseUrl!, supabaseServiceRoleKey!) : null;
 
 const createAuthedClient = (token: string) =>
   createClient(supabaseUrl!, supabaseAnonKey!, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
+    global: { headers: { Authorization: `Bearer ${token}` } },
   });
-
-const serviceClient = isConfigured ? createClient(supabaseUrl!, supabaseServiceRoleKey!) : null;
 
 const extractBearer = (request: NextRequest) => {
   const authHeader = request.headers.get("authorization") ?? "";
@@ -52,144 +56,169 @@ const extractBearer = (request: NextRequest) => {
   return token?.trim() ?? "";
 };
 
-const parseLanguage = (request: NextRequest): LanguageMode => {
-  const value = request.nextUrl.searchParams.get("language");
-  return value === "en" ? "en" : "ko";
-};
+const parseLanguage = (request: NextRequest): LanguageMode => (request.nextUrl.searchParams.get("language") === "en" ? "en" : "ko");
 
-const cleanText = (value: unknown, max = 500) =>
+const cleanText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
-
-const parseAiJson = (text: string) => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
-    }
-  }
-};
+    .trim();
 
 const splitTerms = (...values: Array<string | null | undefined>) =>
   values
     .join(",")
-    .split(/[,/|·\n]/)
-    .map((item) => cleanText(item, 80))
+    .split(/[,/|\n]/)
+    .map((item) => cleanText(item))
     .filter(Boolean);
 
-const scoreFromProfile = (profile: ProfileRow | null) => {
-  if (!profile) return 35;
-  let score = 10;
-  const boost = (key: keyof ProfileRow, points: number) => {
-    if (profile[key]) score += points;
+const clamp = (value: number) => Math.max(5, Math.min(92, Math.round(value)));
+
+const hasMeasurableAchievement = (profile: ProfileRow | null) => /\d|%|\$|won|달러|명|개|배|시간|users|revenue|reduced|increased/i.test(cleanText(profile?.experience_summary));
+
+const isGenericGoal = (profile: ProfileRow | null) => {
+  const role = cleanText(profile?.target_role).toLowerCase();
+  if (!role) return true;
+  return ["developer", "engineer", "manager", "intern", "개발자", "엔지니어", "인턴", "취업"].includes(role);
+};
+
+const getSkillDepth = (profile: ProfileRow | null) => splitTerms(profile?.core_skills, profile?.tech_stack).length;
+
+const collectPenalties = (profile: ProfileRow | null): Penalty[] => {
+  const penalties: Penalty[] = [];
+  const projectCount = Number(profile?.project_count ?? 0);
+  const skillDepth = getSkillDepth(profile);
+
+  if (projectCount <= 0) {
+    penalties.push({ id: "missing-projects", label: "Missing projects", labelKo: "프로젝트 없음", points: 12 });
+  } else if (projectCount === 1) {
+    penalties.push({ id: "thin-projects", label: "Limited project depth", labelKo: "프로젝트 깊이 부족", points: 6 });
+  }
+
+  if (!hasMeasurableAchievement(profile)) {
+    penalties.push({ id: "no-metrics", label: "No measurable achievements", labelKo: "정량 성과 부족", points: 9 });
+  }
+
+  if (isGenericGoal(profile)) {
+    penalties.push({ id: "generic-goal", label: "Generic career goal", labelKo: "목표 직무가 너무 일반적임", points: 7 });
+  }
+
+  if (skillDepth < 4) {
+    penalties.push({ id: "weak-skill-depth", label: "Weak skill depth", labelKo: "스킬 깊이 부족", points: 8 });
+  }
+
+  if (!profile?.portfolio_url && !profile?.github_url) {
+    penalties.push({ id: "empty-portfolio", label: "No portfolio or GitHub link", labelKo: "포트폴리오/GitHub 링크 없음", points: 10 });
+  }
+
+  return penalties;
+};
+
+const evaluateProfile = (profile: ProfileRow | null): EvaluationScores => {
+  const skillDepth = getSkillDepth(profile);
+  const projectCount = Number(profile?.project_count ?? 0);
+  const internshipCount = Number(profile?.internship_count ?? 0);
+  const hasPortfolio = Boolean(profile?.portfolio_url || profile?.github_url);
+  const hasMetrics = hasMeasurableAchievement(profile);
+  const genericGoal = isGenericGoal(profile);
+  const penalties = collectPenalties(profile);
+  const totalPenalty = penalties.reduce((sum, penalty) => sum + penalty.points, 0);
+
+  const requiredFields: Array<keyof ProfileRow> = [
+    "full_name",
+    "school_name",
+    "major",
+    "gpa_score",
+    "core_skills",
+    "tech_stack",
+    "target_role",
+    "preferred_location",
+    "experience_summary",
+    "portfolio_url",
+  ];
+  const filledFields = requiredFields.filter((field) => cleanText(profile?.[field]).length > 0).length;
+
+  return {
+    profileCompleteness: clamp(35 + filledFields * 5.5 - (profile ? 0 : 16) - Math.min(12, totalPenalty * 0.25)),
+    marketReadiness: clamp(38 + skillDepth * 3 + internshipCount * 5 + projectCount * 4 + (genericGoal ? -9 : 5) + (hasMetrics ? 5 : -6) - Math.min(10, totalPenalty * 0.2)),
+    interviewReadiness: clamp(36 + (profile?.experience_summary ? 12 : 0) + (hasMetrics ? 8 : -7) + internshipCount * 4 + projectCount * 3 + (profile?.target_role ? 4 : -5)),
+    portfolioStrength: clamp(28 + projectCount * 10 + (hasPortfolio ? 14 : -10) + (hasMetrics ? 7 : -5) + Math.min(12, skillDepth * 2)),
   };
-  boost("school_name", 8);
-  boost("major", 7);
-  boost("gpa_score", 8);
-  boost("core_skills", 12);
-  boost("tech_stack", 10);
-  boost("role_certifications", 9);
-  boost("language_test_score", 8);
-  boost("target_role", 8);
-  boost("experience_summary", 10);
-  score += Math.min(10, Number(profile.internship_count ?? 0) * 2);
-  score += Math.min(10, Number(profile.project_count ?? 0) * 2);
-  return Math.max(10, Math.min(95, score));
 };
 
-const fallbackRoles = (profile: ProfileRow | null, language: LanguageMode) => {
-  const explicitRole = cleanText(profile?.target_role, 80);
-  const terms = splitTerms(profile?.target_role, profile?.tech_stack, profile?.core_skills, profile?.major);
-  const joined = terms.join(" ").toLowerCase();
-  const roles: string[] = [];
+const evaluateSyntheticProfile = (profile: SyntheticCareerProfile): EvaluationScores => {
+  const projectCount = profile.projects.length;
+  const internshipCount = profile.internships.length;
+  const skillDepth = profile.skills.length;
+  const hasMetrics = /\d|%|\$|users|revenue|reduced|increased/i.test([profile.year_1_state, profile.year_3_state, profile.year_5_state].join(" "));
 
-  if (explicitRole) roles.push(explicitRole);
-  if (/react|frontend|front-end|javascript|typescript|html|css|프론트/.test(joined)) {
-    roles.push(language === "en" ? "Frontend Engineer" : "프론트엔드 개발자");
-  }
-  if (/backend|back-end|spring|java|node|api|server|서버|백엔드/.test(joined)) {
-    roles.push(language === "en" ? "Backend Engineer" : "백엔드 개발자");
-  }
-  if (/python|sql|data|analytics|machine|ai|ml|데이터|분석|머신러닝/.test(joined)) {
-    roles.push(language === "en" ? "Data Analyst / ML Engineer" : "데이터 분석가 / ML 엔지니어");
-  }
-  if (/product|pm|ux|기획|프로덕트/.test(joined)) {
-    roles.push(language === "en" ? "Product Manager" : "프로덕트 매니저");
-  }
-  if (/cloud|aws|docker|kubernetes|devops|infra|인프라/.test(joined)) {
-    roles.push(language === "en" ? "Cloud / DevOps Engineer" : "클라우드 / DevOps 엔지니어");
-  }
-
-  roles.push(language === "en" ? "Software Engineer" : "소프트웨어 엔지니어");
-  return [...new Set(roles)].slice(0, 5);
+  return {
+    profileCompleteness: clamp(42 + skillDepth * 3 + projectCount * 4 + internshipCount * 4),
+    marketReadiness: clamp(40 + skillDepth * 3 + projectCount * 4 + internshipCount * 6 + (profile.target_role ? 4 : -4)),
+    interviewReadiness: clamp(38 + projectCount * 4 + internshipCount * 5 + (profile.key_decisions.length > 2 ? 6 : 0) + (hasMetrics ? 5 : -4)),
+    portfolioStrength: clamp(32 + projectCount * 11 + skillDepth * 2 + (hasMetrics ? 5 : -3)),
+  };
 };
 
-const buildRecommendedRoles = async (profile: ProfileRow | null, coverLetters: CoverLetterRow[], language: LanguageMode) => {
-  const fallback = fallbackRoles(profile, language);
-  if (!openai || !profile) return { roles: fallback, source: "profile_fallback" as const };
+const averageScore = (scores: EvaluationScores) => Math.round((scores.profileCompleteness + scores.marketReadiness + scores.interviewReadiness + scores.portfolioStrength) / 4);
 
-  const profileContext = [
-    `target_role: ${profile.target_role ?? ""}`,
-    `major: ${profile.major ?? ""}`,
-    `core_skills: ${profile.core_skills ?? ""}`,
-    `tech_stack: ${profile.tech_stack ?? ""}`,
-    `certifications: ${profile.role_certifications ?? ""}`,
-    `experience_summary: ${profile.experience_summary ?? ""}`,
-    `projects: ${profile.project_count ?? 0}`,
-    `internships: ${profile.internship_count ?? 0}`,
-  ].join("\n");
+const confidenceLabel = (score: number, language: LanguageMode) => {
+  if (score < 50) return language === "en" ? "Early Stage" : "초기 단계";
+  if (score < 68) return language === "en" ? "Developing" : "성장 중";
+  if (score < 82) return language === "en" ? "Competitive" : "경쟁 가능";
+  return language === "en" ? "Strong Candidate" : "강한 후보";
+};
 
-  const documentContext = coverLetters
-    .map((item, index) =>
-      [
-        `document ${index + 1}`,
-        `resume: ${cleanText(item.resume_text, 900)}`,
-        `job_description: ${cleanText(item.job_description, 700)}`,
-        `cover_letter: ${cleanText(item.generated_text, 700)}`,
-      ].join("\n"),
-    )
-    .join("\n\n");
+const buildExplanation = (scores: EvaluationScores, penalties: Penalty[], language: LanguageMode) => {
+  const entries = Object.entries(scores) as Array<[keyof EvaluationScores, number]>;
+  const strongest = entries.sort((a, b) => b[1] - a[1])[0];
+  const weakest = [...entries].sort((a, b) => a[1] - b[1])[0];
+  const names = {
+    en: {
+      profileCompleteness: "profile completeness",
+      marketReadiness: "market readiness",
+      interviewReadiness: "interview readiness",
+      portfolioStrength: "portfolio strength",
+    },
+    ko: {
+      profileCompleteness: "프로필 완성도",
+      marketReadiness: "시장 준비도",
+      interviewReadiness: "면접 준비도",
+      portfolioStrength: "포트폴리오 강도",
+    },
+  }[language];
 
-  try {
-    const prompt = [
-      language === "en"
-        ? "Recommend 3 to 5 realistic job-role keywords for a career cockpit."
-        : "커리어 콕핏에 표시할 현실적인 추천 직종 키워드 3~5개를 추천한다.",
-      language === "en"
-        ? "Use the user's profile, skills, target role, resume, and cover-letter context. Prefer searchable, practical role names. Do not invent companies."
-        : "사용자의 프로필, 기술스택, 희망직무, 이력/자소서 맥락을 사용한다. 검색 가능한 실무 직무명 위주로 추천하고 회사명은 만들지 않는다.",
-      language === "en" ? "Return JSON only in English." : "반드시 한국어 JSON만 반환한다.",
-      'schema: {"roles":["..."],"reason":"short reason"}',
-      "",
-      "[profile]",
-      profileContext,
-      "",
-      "[documents]",
-      documentContext || "not provided",
-    ].join("\n");
-
-    const response = await openai.responses.create({
-      model: process.env.OPENAI_EVALUATION_MODEL?.trim() || "gpt-4.1-mini",
-      input: prompt,
-      temperature: 0.2,
-    });
-
-    const parsed = parseAiJson(response.output_text?.trim() ?? "") as { roles?: unknown } | null;
-    const roles = Array.isArray(parsed?.roles)
-      ? parsed.roles.map((role) => cleanText(role, 80)).filter(Boolean).slice(0, 5)
-      : [];
-
-    return roles.length > 0 ? { roles, source: "openai" as const } : { roles: fallback, source: "profile_fallback" as const };
-  } catch {
-    return { roles: fallback, source: "profile_fallback" as const };
+  if (language === "en") {
+    if (penalties.some((penalty) => penalty.id === "thin-projects" || penalty.id === "missing-projects")) {
+      return "Your profile is complete, but project depth is still developing.";
+    }
+    return `Your ${names[strongest[0]]} is the strongest signal, while ${names[weakest[0]]} needs the most work.`;
   }
+
+  if (penalties.some((penalty) => penalty.id === "thin-projects" || penalty.id === "missing-projects")) {
+    return "프로필은 어느 정도 채워졌지만 프로젝트 깊이는 아직 성장 중입니다.";
+  }
+  return `${names[strongest[0]]}가 가장 강하고, ${names[weakest[0]]} 보완이 가장 필요합니다.`;
+};
+
+const benchmarkAgainstSyntheticProfiles = (score: number) => {
+  const scores = getSyntheticProfiles().map((profile) => averageScore(evaluateSyntheticProfile(profile))).sort((a, b) => a - b);
+  if (!scores.length) return { topPercent: Math.max(1, Math.min(99, 100 - score)), benchmarkSize: 0, medianScore: 58 };
+  const atOrBelow = scores.filter((item) => item <= score).length;
+  const percentileRank = Math.round((atOrBelow / scores.length) * 100);
+  const topPercent = Math.max(1, Math.min(99, 100 - percentileRank + 1));
+  const medianScore = scores[Math.floor(scores.length / 2)] ?? 58;
+  return { topPercent, benchmarkSize: scores.length, medianScore };
+};
+
+const recommendedRoles = (profile: ProfileRow | null, language: LanguageMode) => {
+  const role = cleanText(profile?.target_role);
+  const skills = splitTerms(profile?.core_skills, profile?.tech_stack).join(" ").toLowerCase();
+  const roles = new Set<string>();
+  if (role) roles.add(role);
+  if (/sql|data|python|analysis|analytics/.test(skills)) roles.add(language === "en" ? "Data Analyst" : "데이터 분석가");
+  if (/react|typescript|javascript|frontend/.test(skills)) roles.add(language === "en" ? "Frontend Engineer" : "프론트엔드 엔지니어");
+  if (/java|node|backend|api|spring/.test(skills)) roles.add(language === "en" ? "Backend Engineer" : "백엔드 엔지니어");
+  roles.add(language === "en" ? "Software Engineer" : "소프트웨어 엔지니어");
+  return [...roles].slice(0, 5);
 };
 
 export async function GET(request: NextRequest) {
@@ -207,76 +236,64 @@ export async function GET(request: NextRequest) {
     error: userError,
   } = await authed.auth.getUser();
 
-  if (userError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (userError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data: profile } = await serviceClient
     .from("profiles")
     .select(
-      "full_name, school_name, major, gpa_score, core_skills, tech_stack, role_certifications, language_test_score, internship_count, project_count, target_role, experience_summary",
+      "full_name, school_name, major, gpa_score, core_skills, tech_stack, role_certifications, language_test_score, internship_count, project_count, target_role, target_industry, preferred_location, portfolio_url, github_url, experience_summary",
     )
     .eq("user_id", user.id)
     .maybeSingle<ProfileRow>();
 
-  const { data: coverLetters } = await serviceClient
-    .from("cover_letters")
-    .select("resume_text, job_description, generated_text")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(3);
-
-  const baseScore = scoreFromProfile(profile ?? null);
-  const topPercent = Math.max(1, Math.min(99, Math.round(100 - baseScore)));
-  const completeness = Math.min(100, Math.max(20, Math.round((baseScore / 95) * 100)));
-  const displayName =
-    profile?.full_name ||
-    (user.user_metadata?.full_name as string | undefined) ||
-    user.email?.split("@")[0] ||
-    (language === "en" ? "User" : "사용자");
-
-  const trend = [
-    Math.max(20, baseScore - 12),
-    Math.max(25, baseScore - 8),
-    Math.max(30, baseScore - 5),
-    Math.max(35, baseScore - 2),
-    baseScore,
-  ];
-
-  const recommended = await buildRecommendedRoles(profile ?? null, (coverLetters ?? []) as CoverLetterRow[], language);
-  const passRate = Math.max(20, Math.min(90, baseScore - 5));
-  const interviewRate = Math.max(15, Math.min(85, baseScore - 10));
+  const scores = evaluateProfile(profile ?? null);
+  const penalties = collectPenalties(profile ?? null);
+  const overall = averageScore(scores);
+  const benchmark = benchmarkAgainstSyntheticProfiles(overall);
+  const displayName = profile?.full_name || (user.user_metadata?.full_name as string | undefined) || user.email?.split("@")[0] || (language === "en" ? "User" : "사용자");
 
   return NextResponse.json({
     name: displayName,
-    topPercent,
-    completeness,
-    trend,
-    recommendedRoles: recommended.roles,
-    recommendedRoleSource: recommended.source,
+    topPercent: benchmark.topPercent,
+    benchmarkSize: benchmark.benchmarkSize,
+    benchmarkScore: overall,
+    benchmarkMedianScore: benchmark.medianScore,
+    completeness: scores.profileCompleteness,
+    scores,
+    penalties: penalties.map((penalty) => ({
+      ...penalty,
+      label: language === "en" ? penalty.label : penalty.labelKo,
+    })),
+    confidenceLabel: confidenceLabel(overall, language),
+    explanation: buildExplanation(scores, penalties, language),
+    trend: [Math.max(20, overall - 8), Math.max(25, overall - 5), Math.max(30, overall - 2), overall],
+    recommendedRoles: recommendedRoles(profile ?? null, language),
+    recommendedRoleSource: "profile_fallback",
     signals:
       language === "en"
         ? [
-            `Estimated role-fit signal: ${baseScore}%`,
-            `Estimated document-screening readiness: ${passRate}%`,
-            `Estimated interview-entry readiness: ${interviewRate}%`,
+            `Profile Completeness: ${scores.profileCompleteness}`,
+            `Market Readiness: ${scores.marketReadiness}`,
+            `Interview Readiness: ${scores.interviewReadiness}`,
+            `Portfolio Strength: ${scores.portfolioStrength}`,
           ]
         : [
-            `직무 적합도 예상 신호 ${baseScore}%`,
-            `서류 통과 준비도 예상 ${passRate}%`,
-            `면접 진입 준비도 예상 ${interviewRate}%`,
+            `프로필 완성도: ${scores.profileCompleteness}`,
+            `시장 준비도: ${scores.marketReadiness}`,
+            `면접 준비도: ${scores.interviewReadiness}`,
+            `포트폴리오 강도: ${scores.portfolioStrength}`,
           ],
     weeklyReport:
       language === "en"
         ? [
-            "Add at least two quantified achievement sentences to your profile.",
-            "Update role-related certifications, language scores, or project evidence.",
-            "Open Matching, save three recommended postings, and review the gap analysis.",
+            "Add one measurable achievement with numbers.",
+            "Publish or link one portfolio proof item.",
+            "Make your target role more specific.",
           ]
         : [
-            "프로필에 정량 성과 문장을 2개 이상 추가하세요.",
-            "희망 직무 관련 자격증, 어학 점수, 프로젝트 증거를 최신화하세요.",
-            "매칭 페이지에서 추천 공고 3개를 저장하고 갭 분석을 확인하세요.",
+            "숫자가 들어간 정량 성과를 하나 추가하세요.",
+            "포트폴리오 증거 하나를 공개하거나 링크하세요.",
+            "목표 직무를 더 구체적으로 적으세요.",
           ],
   });
 }

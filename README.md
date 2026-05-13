@@ -36,7 +36,6 @@ And a **Portfolio Optimizer** that generates tailored cover letter drafts and su
 - **Authentication:** Google OAuth
 - **AI Engine:** OpenAI API (**GPT-4o mini** for LLM)
 - **Project Management:** [Jira Software](https://sbucse416.atlassian.net/jira/software/projects/CH/boards/1?visitedUserSeg=true)
-- **Design:** Figma
 
 ---
 

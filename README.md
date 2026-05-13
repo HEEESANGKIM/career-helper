@@ -25,8 +25,8 @@ And a **Portfolio Optimizer** that generates tailored cover letter drafts and su
 
 ## 3. Team Members
 
-- **Dohyeon Lee** - GitHub: @[DohyeonLee0]
-- **Heesang Kim** - GitHub: @[HEEESANGKIM]
+- **Dohyeon Lee** - GitHub: @[DohyeonLee0] / dohyeon.lee@stonybrook.edu
+- **Heesang Kim** - GitHub: @[HEEESANGKIM] / heesang.kim@stonybrook.edu
 
 ---
 
@@ -75,7 +75,7 @@ To run the project locally with full AI and Database functionality, you must cre
 NEXT_PUBLIC_SUPABASE_URL=supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=supabase_key
 OPENAI_API_KEY=openai_key
-...
+```
 
 4. Building and Running:
 

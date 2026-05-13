@@ -57,37 +57,38 @@ This project is built with **Next.js 16**, **React 19**, and **Tailwind CSS 4**.
 - **npm**: Included with your Node.js installation.
 
 ### Installation & Setup
-```bash
-1. Clone the repository:
 
+1. Clone the repository:
+```bash
 git clone [https://github.com/HEEESANGKIM/career-helper.git]
 cd career-helper
+```
 
 2. Install dependencies:
-
+```bash
 npm install
+```
 
 3. Environment Variables:
 To run the project locally with full AI and Database functionality, you must create a .env.local file in the root directory and add the following keys:
-
+```bash
 NEXT_PUBLIC_SUPABASE_URL=supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=supabase_key
 OPENAI_API_KEY=openai_key
-
-npm run dev
+...
 
 4. Building and Running:
 
-To Run Development Server:
-
+-To Run Development Server:
+```bash
 npm run dev
-
 Access the app at http://localhost:3000.
+```
 
-To Build for Production:
-
+-To Build for Production:
+```bash
 npm run build
-bash```
+```
 
 ## 7. Bug Tracking and Reporting
 We use **GitHub Issues** to track all bugs and feature requests.

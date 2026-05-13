@@ -41,12 +41,15 @@ And a **Portfolio Optimizer** that generates tailored cover letter drafts and su
 
 ## 5. Deployment (Beta)
 
-https://career-helper-dun.vercel.app/
+- **Beta Site URL:** (https://career-helper-dun.vercel.app/)
+- **Deployment Platform:** Vercel (Frontend & Serverless Functions)
+- **Database Hosting:** Supabase Cloud
 
 ---
 
 ## 6. How to Run and View the Project
 
+> **Supported OS:** **Windows (Confirmed)**. Others (macOS, Linux) are currently under testing for compatibility.
 This project is built with **Next.js 16**, **React 19**, and **Tailwind CSS 4**. To view the front-end web pages and the UI mockups implemented in code, follow the steps below.
 
 ### Prerequisites
@@ -61,14 +64,44 @@ git clone [https://github.com/HEEESANGKIM/career-helper.git]
 cd career-helper
 
 2. Install dependencies:
-This project requires several packages including **Supabase, OpenAI, and Lucide React**. You can install all necessary dependencies listed in the package.json by running.
-but now you can just install npm to check the Web Design
 
 npm install
 
-3. Run the development server:
+3. Environment Variables:
+To run the project locally with full AI and Database functionality, you must create a .env.local file in the root directory and add the following keys:
+
+NEXT_PUBLIC_SUPABASE_URL=supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=supabase_key
+OPENAI_API_KEY=openai_key
 
 npm run dev
 
-4. Access the application:
-Open your browser and navigate to http://localhost:3000.
+4. Building and Running:
+
+To Run Development Server:
+
+npm run dev
+
+Access the app at http://localhost:3000.
+
+To Build for Production:
+
+npm run build
+bash```
+
+## 7. Bug Tracking and Reporting
+We use **GitHub Issues** to track all bugs and feature requests.
+
+- **View Outstanding Bugs:** [https://github.com/HEEESANGKIM/career-helper/issues]
+
+- **How to Report a Bug:**
+  1. Go to the **Issues** tab in this repository.
+  2. Click the **New Issue** button.
+  3. Provide a clear title and describe:
+     - Steps to reproduce the bug.
+     - Expected behavior vs. Actual result.
+     - (Optional) Screenshots for UI-related issues.
+  4. Assign a label (e.g., `bug`, `ui`, `ai-api`) if applicable.
+
+
+

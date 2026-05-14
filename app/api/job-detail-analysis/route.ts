@@ -27,19 +27,21 @@ export async function POST(request: NextRequest) {
   const summary = String(body?.summary ?? "");
   const profileSummary = String(body?.profileSummary ?? "");
 
-  const fallback = {
-    fitSummary: "프로필과 공고를 비교한 기본 갭 분석 결과입니다.",
-    strengths: ["핵심 스킬 키워드가 일부 일치합니다.", "직무 관심도와 목표가 명확합니다."],
-    gaps: ["정량 성과 기반 경험 표현이 부족합니다.", "해당 직무 관련 도메인 사례 보강이 필요합니다."],
-    actionItems: ["프로젝트 성과를 숫자로 재작성", "공고 키워드 기반 커버레터 재생성", "예상 면접 질문 3개 사전 답변 준비"],
-  };
+  if (!jobTitle || !company || !summary || !profileSummary) {
+    return NextResponse.json({ error: "공고와 프로필 정보가 부족해 사실 기반 분석을 만들 수 없습니다." }, { status: 400 });
+  }
 
-  if (!openai) return NextResponse.json(fallback);
+  if (!openai) {
+    return NextResponse.json({ error: "OpenAI API 키가 없어 상세 분석을 실행할 수 없습니다." }, { status: 503 });
+  }
 
   try {
     const prompt = [
       "너는 취업 컨설턴트다.",
       "지원자 프로필과 채용 공고를 비교해 강점/갭/실행 과제를 JSON으로 출력한다.",
+      "입력된 공고/프로필에 없는 경력, 수상, 스킬, 기업 정보는 만들지 않는다.",
+      "지원자수/경쟁 지표가 입력에 있을 때만 반영하고, 없는 숫자는 추정하지 않는다.",
+      "현실적으로 평가하고 과장된 낙관 표현은 금지한다.",
       "반드시 JSON만 출력한다.",
       "스키마:",
       `{
@@ -57,15 +59,20 @@ export async function POST(request: NextRequest) {
 
     const response = await openai.responses.create({ model: "gpt-4o-mini", input: prompt });
     const parsed = parseJson(response.output_text?.trim() ?? "");
-    if (!parsed) return NextResponse.json(fallback);
+    if (!parsed || typeof parsed !== "object") {
+      return NextResponse.json({ error: "상세 분석 결과를 검증 가능한 JSON으로 받지 못했습니다." }, { status: 502 });
+    }
+
+    const typed = parsed as { fitSummary?: unknown; strengths?: unknown; gaps?: unknown; actionItems?: unknown };
 
     return NextResponse.json({
-      fitSummary: String(parsed.fitSummary ?? fallback.fitSummary),
-      strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String).slice(0, 3) : fallback.strengths,
-      gaps: Array.isArray(parsed.gaps) ? parsed.gaps.map(String).slice(0, 3) : fallback.gaps,
-      actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.map(String).slice(0, 4) : fallback.actionItems,
+      fitSummary: String(typed.fitSummary ?? "입력된 공고와 프로필 기준으로만 분석했습니다."),
+      strengths: Array.isArray(typed.strengths) ? typed.strengths.map(String).slice(0, 3) : [],
+      gaps: Array.isArray(typed.gaps) ? typed.gaps.map(String).slice(0, 3) : [],
+      actionItems: Array.isArray(typed.actionItems) ? typed.actionItems.map(String).slice(0, 4) : [],
     });
-  } catch {
-    return NextResponse.json(fallback);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "상세 분석 중 알 수 없는 오류가 발생했습니다.";
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

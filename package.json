@@ -6,11 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "data:onet": "tsx scripts/data/ingest_onet.ts",
+    "data:bls": "tsx scripts/data/ingest_bls_oews.ts",
+    "data:h1b": "tsx scripts/data/ingest_h1b_lca.ts",
+    "data:templates": "tsx scripts/data/build_career_templates.ts",
+    "data:synthetic": "tsx scripts/data/generate_synthetic_profiles.ts",
+    "data:seed": "tsx scripts/data/seed_database.ts"
   },
   "dependencies": {
+    "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "^2.99.1",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "openai": "^6.29.0",
@@ -26,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

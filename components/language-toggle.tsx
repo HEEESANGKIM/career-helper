@@ -1,0 +1,24 @@
+﻿"use client";
+
+import { useLanguage } from "@/components/language-provider";
+
+export default function LanguageToggle() {
+  const { language, setLanguage } = useLanguage();
+  const isEn = language === "en";
+
+  return (
+    <label className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-xs font-semibold text-[var(--muted-strong)]">
+      <span className="hidden text-[11px] sm:inline">{isEn ? "Language" : "언어"}</span>
+      <select
+        value={language}
+        onChange={(e) => setLanguage(e.target.value as "ko" | "en")}
+        className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--muted-strong)] outline-none sm:text-[11px]"
+        aria-label={isEn ? "Language" : "언어"}
+      >
+        <option value="ko">한국어</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+  );
+}
+

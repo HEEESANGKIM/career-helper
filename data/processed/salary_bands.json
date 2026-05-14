@@ -1,0 +1,17 @@
+[
+  { "role": "Software Engineer", "entry": "65000-95000", "mid": "95000-140000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Data Analyst", "entry": "55000-80000", "mid": "80000-115000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "UI/UX Designer", "entry": "52000-78000", "mid": "78000-115000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Product Manager", "entry": "65000-95000", "mid": "95000-140000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Digital Marketer", "entry": "45000-65000", "mid": "65000-95000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Business Analyst", "entry": "55000-78000", "mid": "78000-115000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "HR Coordinator", "entry": "42000-60000", "mid": "60000-85000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Finance Analyst", "entry": "55000-75000", "mid": "75000-105000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Operations Associate", "entry": "42000-62000", "mid": "62000-90000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Cybersecurity Analyst", "entry": "60000-85000", "mid": "85000-125000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "QA Engineer", "entry": "48000-70000", "mid": "70000-100000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Customer Success Associate", "entry": "45000-65000", "mid": "65000-95000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Sales Development Representative", "entry": "45000-70000", "mid": "70000-110000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "Content Strategist", "entry": "42000-62000", "mid": "62000-90000", "currency": "USD", "source": "BLS OEWS normalized estimate" },
+  { "role": "IT Support Specialist", "entry": "42000-62000", "mid": "62000-85000", "currency": "USD", "source": "BLS OEWS normalized estimate" }
+]

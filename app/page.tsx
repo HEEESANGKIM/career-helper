@@ -1,162 +1,222 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import AuthControls from "@/components/auth-controls";
-import HeroRotator from "@/components/hero-rotator";
+import { ArrowRight, BriefcaseBusiness, CheckCircle2, FileText, SearchCheck, Swords, Workflow } from "lucide-react";
+import { DashboardPreview } from "@/components/dashboard-preview";
+import { AnimatedSection, MotionCard, StaggerItem, StaggeredGrid } from "@/components/motion-primitives";
 import { useLanguage } from "@/components/language-provider";
+import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
+
+const featureCards = [
+  {
+    href: "/cover-letter",
+    icon: FileText,
+    titleKo: "Resume Lab",
+    titleEn: "Resume Lab",
+    bodyKo: "AI 피드백과 직무별 제안으로 이력서를 더 선명하게 개선합니다.",
+    bodyEn: "Improve your resume with AI-powered feedback and role-specific suggestions.",
+    metricKo: "AI 피드백",
+    metricEn: "AI feedback",
+  },
+  {
+    href: "/hiring-simulator",
+    icon: BriefcaseBusiness,
+    titleKo: "Hiring Simulator",
+    titleEn: "Hiring Simulator",
+    bodyKo: "지원서 스크리닝부터 AI 면접 피드백까지 전체 채용 여정을 연습합니다.",
+    bodyEn: "Simulate the full hiring journey, from resume screening to AI interview feedback.",
+    metricKo: "통합 연습",
+    metricEn: "Full loop",
+  },
+  {
+    href: "/next-move",
+    icon: Swords,
+    titleKo: "Next Move",
+    titleEn: "Next Move",
+    bodyKo: "커리어를 전략 보드처럼 비교하고 가장 좋은 다음 행동을 찾습니다.",
+    bodyEn: "Plan your career like a strategy game and discover your best next move.",
+    metricKo: "전략 보드",
+    metricEn: "Strategy board",
+  },
+  {
+    href: "/matching",
+    icon: SearchCheck,
+    titleKo: "Job Match",
+    titleEn: "Job Match",
+    bodyKo: "프로필, 스킬, 목표에 맞는 채용 공고를 우선순위화합니다.",
+    bodyEn: "Find roles that match your profile, skills, and career goals.",
+    metricKo: "채용 매칭",
+    metricEn: "Role fit",
+  },
+];
+
+const storySteps = [
+  {
+    step: "01",
+    titleKo: "신호 만들기",
+    titleEn: "Build your signal",
+    bodyKo: "프로필, 기술, 프로젝트, 목표 직무를 하나의 준비도 신호로 정리합니다.",
+    bodyEn: "Structure your profile, skills, projects, and target role into one readiness signal.",
+  },
+  {
+    step: "02",
+    titleKo: "채용 여정 연습",
+    titleEn: "Practice the hiring loop",
+    bodyKo: "면접 연습과 취업 시뮬레이션을 Hiring Simulator 안에서 한 번에 진행합니다.",
+    bodyEn: "Use Hiring Simulator for application fit, interview rounds, answer feedback, and readiness reports.",
+  },
+  {
+    step: "03",
+    titleKo: "다음 선택 비교",
+    titleEn: "Choose the next move",
+    bodyKo: "Next Move에서 선택지의 리스크, 보상, 시간 비용, 장기 결과를 비교합니다.",
+    bodyEn: "Compare risk, reward, effort, time cost, and long-term outcomes in Next Move.",
+  },
+];
+
+const trustSignals = [
+  { ko: "Resume Lab", en: "Resume Lab" },
+  { ko: "Hiring Simulator", en: "Hiring Simulator" },
+  { ko: "Next Move", en: "Next Move" },
+];
 
 export default function Home() {
-  const { tx } = useLanguage();
+  const { language } = useLanguage();
+  const isEn = language === "en";
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    if (!supabase || !isSupabaseConfigured) return;
+    const client = supabase;
+    let mounted = true;
+
+    const checkSession = async () => {
+      const session = await getSessionWithRetry(20, 120);
+      if (!mounted) return;
+      setIsLoggedIn(Boolean(session));
+    };
+
+    void checkSession();
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setIsLoggedIn(Boolean(session));
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
-    <div className="app-bg">
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 md:py-10">
-        <section className="surface-card reveal-up p-6 md:p-8">
-          <div className="hero-grid">
-            <div className="col-span-12 text-left">
-              <p className="inline-block rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">AI Career Intelligence</p>
-              <div className="mt-4">
-                <HeroRotator mode="hero" />
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-2">
-                <Link className="primary-btn px-4 py-2.5 text-sm" href="/profile">
-                  {tx("프로필 세팅 시작", "Start profile setup")}
-                </Link>
-                <Link className="secondary-btn px-4 py-2.5 text-sm" href="/matching">
-                  {tx("실시간 매칭 보기", "View real-time matching")}
-                </Link>
-                <Link className="secondary-btn px-4 py-2.5 text-sm" href="/cover-letter">
-                  {tx("자소서 엔진 실행", "Run cover letter engine")}
-                </Link>
-              </div>
-
-              <div className="mt-6 flex flex-wrap gap-2">
-                <span className="trust-chip">{tx("실공고 기반 AI 선별", "AI filtering from live openings")}</span>
-                <span className="trust-chip">{tx("프로필 핏 점수 자동 계산", "Automatic profile fit scoring")}</span>
-                <span className="trust-chip">{tx("문서 생성부터 면접 대비까지", "From documents to interview prep")}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-5 grid gap-4 md:grid-cols-12">
-          <div className="grid gap-4 md:col-span-8">
-            <article className="bento-card stagger-item stagger-1 text-left">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Core Workflow</p>
-              <h2 className="mt-2 text-xl font-bold text-slate-900">{tx("합격 확률을 끌어올리는 3단계 루틴", "3-step routine to raise hiring odds")}</h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500" aria-hidden />
-                    <p className="text-sm font-semibold text-slate-900">{tx("1. 프로필 정밀 세팅", "1. Precision profile setup")}</p>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-600">
-                    {tx(
-                      "학력, 전공, 자격, 어학, 프로젝트를 한 번에 구조화해 검색 가능한 경쟁력으로 만듭니다.",
-                      "Structure education, major, certifications, language scores, and projects into searchable strengths.",
-                    )}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-cyan-500" aria-hidden />
-                    <p className="text-sm font-semibold text-slate-900">{tx("2. 채용 핏 스코어링", "2. Job-fit scoring")}</p>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-600">
-                    {tx(
-                      "규칙 점수와 AI 분석을 합쳐 공고별 적합도와 우선순위를 실전형 숫자로 제공합니다.",
-                      "Combine rule-based scores and AI analysis into practical fit and priority numbers per posting.",
-                    )}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" aria-hidden />
-                    <p className="text-sm font-semibold text-slate-900">{tx("3. 지원 문서 고도화", "3. Application document refinement")}</p>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-600">
-                    {tx(
-                      "자소서 초안 생성부터 톤 튜닝, 재생성까지 빠르게 반복해 제출 품질을 단단하게 완성합니다.",
-                      "Iterate quickly from first draft to tone tuning and regeneration to finalize submission quality.",
-                    )}
-                  </p>
-                </div>
-              </div>
-            </article>
-
-            <article className="bento-card stagger-item stagger-2 text-left">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Execution Checklist</p>
-              <h3 className="mt-2 text-lg font-semibold text-slate-900">{tx("오늘 바로 점수 올리는 4가지 액션", "4 actions to improve today")}</h3>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  {tx(
-                    "프로필에서 학력, 전공, 자격, 어학 점수를 먼저 입력해 기준 데이터를 완성하기",
-                    "Complete baseline data first by entering education, major, certifications, and language scores in profile.",
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  {tx(
-                    "채용 매칭에서 실공고 탐색을 실행하고 상위 추천 직무부터 우선 확인하기",
-                    "Run live job matching and review top recommended roles first.",
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  {tx(
-                    "AI 커버레터에서 초안을 만든 뒤 톤 재생성으로 더 설득력 있는 버전 비교하기",
-                    "Generate a cover letter draft, then compare stronger versions with tone regeneration.",
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                  {tx(
-                    "시뮬레이터에서 지원-서류-면접 흐름을 리허설하며 약한 구간 보완하기",
-                    "Rehearse application, document, and interview flow in simulator to patch weak points.",
-                  )}
-                </div>
-              </div>
-            </article>
-          </div>
-
-          <aside className="grid gap-4 md:col-span-4">
-            <div className="bento-card stagger-item stagger-3 text-left">
-              <p className="text-sm font-semibold text-slate-900">{tx("빠른 이동", "Quick links")}</p>
-              <div className="mt-3 grid gap-2">
-                <AuthControls variant="menu" />
-                <Link className="secondary-btn px-3 py-2 text-sm" href="/my-info">
-                  {tx("내 정보", "My info")}
-                </Link>
-                <Link className="secondary-btn px-3 py-2 text-sm" href="/dashboard">
-                  {tx("커리어 대시보드", "Career dashboard")}
-                </Link>
-                <Link className="secondary-btn px-3 py-2 text-sm" href="/profile">
-                  {tx("프로필 설정", "Profile setup")}
-                </Link>
-                <Link className="secondary-btn px-3 py-2 text-sm" href="/matching">
-                  {tx("채용 매칭", "Job matching")}
-                </Link>
-                <Link className="secondary-btn px-3 py-2 text-sm" href="/cover-letter">
-                  {tx("AI 커버레터", "AI cover letter")}
-                </Link>
-              </div>
-            </div>
-
-            <div className="bento-card stagger-item stagger-4 text-left">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Featured</p>
-              <h3 className="mt-2 text-sm font-semibold text-slate-900">{tx("실전 채용 시뮬레이터", "Practical hiring simulator")}</h3>
-              <p className="mt-2 text-xs text-slate-600">
-                {tx(
-                  "기업형 가상 공고에 지원하고 서류, 자소서, 면접, 최종 결과까지 한 번에 리허설해 실제 지원 전에 약점을 선제 보완할 수 있습니다.",
-                  "Apply to realistic virtual postings and rehearse documents, essay, interview, and final results end-to-end before real applications.",
-                )}
+    <div className="app-bg overflow-hidden">
+      <main className="mx-auto w-full max-w-[1400px] px-4 pb-16 pt-8 sm:px-6 lg:px-8">
+        <section className="landing-hero relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-[34px] border border-[var(--line)] px-5 py-10 shadow-[var(--shadow)] sm:px-8 lg:px-10">
+          <div className="landing-aurora" aria-hidden="true" />
+          <div className="relative grid min-h-[720px] gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
+            <div>
+              <div className="page-kicker">PathMate.ai</div>
+              <h1 className="ko-friendly mt-7 max-w-4xl text-5xl font-semibold leading-[0.98] tracking-tight text-[var(--foreground)] sm:text-6xl lg:text-7xl">
+                {isEn ? "Get hired smarter with AI." : "AI로 더 전략적으로 취업을 준비하세요."}
+              </h1>
+              <p className="ko-friendly mt-6 max-w-2xl text-lg leading-8 text-[var(--muted-strong)] sm:text-xl">
+                {isEn
+                  ? "Improve your resume, simulate the hiring journey, compare your next career moves, and find better-matched roles."
+                  : "이력서를 개선하고, 채용 여정을 시뮬레이션하고, 다음 커리어 선택지를 비교하고, 더 잘 맞는 공고를 찾으세요."}
               </p>
-              <div className="mt-3">
-                <Link href="/simulator" className="primary-btn inline-block px-3 py-2 text-xs">
-                  {tx("시뮬레이터 시작", "Start simulator")}
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Link className="primary-btn px-6 py-3 text-sm" href={isLoggedIn ? "/dashboard" : "/register"}>
+                  {isEn ? "Start Free" : "무료 시작"}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+                <Link className="secondary-btn px-6 py-3 text-sm" href="/dashboard">
+                  {isEn ? "View Dashboard" : "대시보드 보기"}
                 </Link>
               </div>
+              <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
+                {trustSignals.map((item) => (
+                  <div key={item.en} className="ko-friendly rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_82%,transparent)] p-3 text-sm font-semibold text-[var(--muted-strong)]">
+                    <CheckCircle2 className="mb-2 text-[var(--accent-2)]" size={16} aria-hidden="true" />
+                    {isEn ? item.en : item.ko}
+                  </div>
+                ))}
+              </div>
             </div>
-          </aside>
+            <div className="lg:sticky lg:top-28">
+              <DashboardPreview />
+            </div>
+          </div>
         </section>
+
+        <AnimatedSection className="mt-16">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="page-kicker">{isEn ? "Core Workflow" : "핵심 워크플로우"}</p>
+              <h2 className="ko-friendly mt-5 text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl">
+                {isEn ? "Four tools. One hiring system." : "네 가지 도구, 하나의 취업 시스템."}
+              </h2>
+            </div>
+            <Link href="/dashboard" className="secondary-btn px-5 py-3 text-sm">{isEn ? "Open Dashboard" : "대시보드 열기"}</Link>
+          </div>
+          <StaggeredGrid className="responsive-card-grid mt-8">
+            {featureCards.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <StaggerItem key={feature.titleEn}>
+                  <Link href={feature.href} className="feature-glow-card content-card clickable-card block h-full p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[var(--line)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)]">
+                        <Icon size={20} aria-hidden="true" />
+                      </span>
+                      <span className="accent-pill px-3 py-1 text-xs font-semibold">{isEn ? feature.metricEn : feature.metricKo}</span>
+                    </div>
+                    <h3 className="ko-friendly mt-5 text-lg font-semibold text-[var(--foreground)]">{isEn ? feature.titleEn : feature.titleKo}</h3>
+                    <p className="ko-friendly mt-2 text-sm leading-6 text-[var(--muted)]">{isEn ? feature.bodyEn : feature.bodyKo}</p>
+                  </Link>
+                </StaggerItem>
+              );
+            })}
+          </StaggeredGrid>
+        </AnimatedSection>
+
+        <AnimatedSection className="mt-16 rounded-[30px] border border-[var(--line)] bg-[linear-gradient(145deg,color-mix(in_srgb,var(--accent)_12%,transparent),var(--surface))] p-6 shadow-[var(--shadow-soft)] sm:p-8">
+          <p className="page-kicker">{isEn ? "How It Works" : "작동 방식"}</p>
+          <div className="responsive-card-grid mt-7">
+            {storySteps.map((item) => (
+              <MotionCard key={item.step} className="content-card h-full p-6">
+                <span className="path-dot h-10 w-10 text-xs">{item.step}</span>
+                <h3 className="ko-friendly mt-5 text-lg font-semibold text-[var(--foreground)]">{isEn ? item.titleEn : item.titleKo}</h3>
+                <p className="ko-friendly mt-3 text-sm leading-6 text-[var(--muted)]">{isEn ? item.bodyEn : item.bodyKo}</p>
+              </MotionCard>
+            ))}
+          </div>
+        </AnimatedSection>
+
+        <div className="mt-10 rounded-[28px] border border-[var(--line)] bg-[var(--surface)] p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="ko-friendly inline-flex items-center gap-2 text-sm font-semibold text-[var(--muted-strong)]">
+              <Workflow size={17} className="text-[var(--accent-2)]" aria-hidden="true" />
+              {isEn ? "Quick launch" : "빠른 실행"}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                ["/dashboard", isEn ? "Dashboard" : "대시보드"],
+                ["/cover-letter", isEn ? "Resume Lab" : "Resume Lab"],
+                ["/hiring-simulator", isEn ? "Hiring Simulator" : "Hiring Simulator"],
+                ["/next-move", isEn ? "Next Move" : "Next Move"],
+                ["/matching", isEn ? "Job Match" : "Job Match"],
+              ].map(([href, label]) => (
+                <Link key={href} href={href} className="secondary-btn px-4 py-2 text-sm">
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );

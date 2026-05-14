@@ -1,0 +1,17 @@
+[
+  { "role": "Software Engineer", "onet_code": "15-1252.00", "category": "Tech" },
+  { "role": "Data Analyst", "onet_code": "15-2051.00", "category": "Tech" },
+  { "role": "UI/UX Designer", "onet_code": "15-1255.00", "category": "Creative" },
+  { "role": "Product Manager", "onet_code": "11-2021.00", "category": "Business" },
+  { "role": "Digital Marketer", "onet_code": "13-1161.00", "category": "Creative" },
+  { "role": "Business Analyst", "onet_code": "13-1111.00", "category": "Business" },
+  { "role": "HR Coordinator", "onet_code": "13-1071.00", "category": "Corporate" },
+  { "role": "Finance Analyst", "onet_code": "13-2051.00", "category": "Corporate" },
+  { "role": "Operations Associate", "onet_code": "13-1199.00", "category": "Business" },
+  { "role": "Cybersecurity Analyst", "onet_code": "15-1212.00", "category": "Tech" },
+  { "role": "QA Engineer", "onet_code": "15-1253.00", "category": "Tech" },
+  { "role": "Customer Success Associate", "onet_code": "43-4051.00", "category": "Business" },
+  { "role": "Sales Development Representative", "onet_code": "41-3091.00", "category": "Business" },
+  { "role": "Content Strategist", "onet_code": "27-3043.00", "category": "Creative" },
+  { "role": "IT Support Specialist", "onet_code": "15-1232.00", "category": "Tech" }
+]

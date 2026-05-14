@@ -1,0 +1,17 @@
+[
+  { "role": "Software Engineer", "skills": ["Git", "JavaScript or Python", "Web/API basics", "Debugging", "Data structures basics"] },
+  { "role": "Data Analyst", "skills": ["SQL", "Spreadsheets", "Visualization", "Basic statistics", "Business interpretation"] },
+  { "role": "UI/UX Designer", "skills": ["Figma", "User research", "Wireframes", "Prototyping", "Design critique"] },
+  { "role": "Product Manager", "skills": ["Problem framing", "Prioritization", "Metrics", "User research"] },
+  { "role": "Digital Marketer", "skills": ["SEO", "Campaign planning", "Ad metrics", "Content"] },
+  { "role": "Business Analyst", "skills": ["Excel", "Problem structuring", "Research", "Stakeholder communication"] },
+  { "role": "HR Coordinator", "skills": ["Communication", "Scheduling", "Documentation", "Professionalism"] },
+  { "role": "Finance Analyst", "skills": ["Excel", "Financial statements", "Budgeting", "Accuracy"] },
+  { "role": "Operations Associate", "skills": ["Accuracy", "Prioritization", "Process improvement", "Collaboration"] },
+  { "role": "Cybersecurity Analyst", "skills": ["Networking basics", "Log analysis", "Risk prioritization", "Reporting"] },
+  { "role": "QA Engineer", "skills": ["Test cases", "Bug reports", "Reproduction steps", "Basic automation"] },
+  { "role": "Customer Success Associate", "skills": ["Empathy", "Problem solving", "Product understanding", "Follow-up"] },
+  { "role": "Sales Development Representative", "skills": ["Research", "Persuasion", "Objection handling", "Confidence"] },
+  { "role": "Content Strategist", "skills": ["Audience insight", "Message structure", "Editing", "SEO"] },
+  { "role": "IT Support Specialist", "skills": ["Troubleshooting", "Networking basics", "Documentation", "User support"] }
+]

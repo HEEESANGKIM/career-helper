@@ -79,7 +79,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const resumeText = typeof body?.resumeText === "string" ? body.resumeText.trim() : "";
   const jobDescription = typeof body?.jobDescription === "string" ? body.jobDescription.trim() : "";
-  const tone = typeof body?.tone === "string" ? body.tone.trim() : "professional";
+  const requestedTone = typeof body?.tone === "string" ? body.tone.trim() : "professional";
+  const tone = ["professional", "confident", "concise", "realistic"].includes(requestedTone) ? requestedTone : "professional";
 
   if (!resumeText) {
     return NextResponse.json({ error: "resumeText is required." }, { status: 400 });
@@ -107,9 +108,15 @@ export async function POST(request: NextRequest) {
     `경험요약: ${profile?.experience_summary ?? ""}`,
   ].join("\n");
 
+  const toneInstruction =
+    tone === "realistic"
+      ? "현실적으로 작성: 과장·추정 표현 금지, 검증 가능한 사실/경험 중심, 부족한 부분은 솔직히 보완 계획으로 표현."
+      : "과장 없이 구체적으로 작성.";
+
   const prompt = [
     "너는 취업 코치다. 한국어로 커버레터 초안을 작성해라.",
     `톤: ${tone}`,
+    toneInstruction,
     "",
     "[지원자 프로필]",
     profileContext,
@@ -123,7 +130,7 @@ export async function POST(request: NextRequest) {
     "요구사항:",
     "1) 1문단 도입 + 2문단 본문 + 1문단 마무리",
     "2) 지원자 강점 3가지를 근거와 함께 포함",
-    "3) 과장 없이 구체적으로 작성",
+    "3) 주장마다 근거를 붙이고, 근거가 약한 부분은 보완 계획으로 정리",
     "4) 마지막에 3줄 요약 bullet 포함",
   ].join("\n");
 

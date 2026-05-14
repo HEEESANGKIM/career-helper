@@ -1,74 +1,75 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
-type Locale = "ko" | "en";
+export type LanguageMode = "ko" | "en";
 
 type LanguageContextValue = {
-  locale: Locale;
-  setLocale: (next: Locale) => void;
-  toggleLocale: () => void;
-  tx: (ko: string, en: string) => string;
+  language: LanguageMode;
+  setLanguage: (language: LanguageMode) => void;
 };
-
-const STORAGE_KEY = "career-helper-locale";
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>("en");
+const STORAGE_KEY = "language-mode";
+
+const detectLanguage = (): LanguageMode => {
+  if (typeof window === "undefined") return "ko";
+  const saved = window.localStorage.getItem(STORAGE_KEY);
+  if (saved === "ko" || saved === "en") return saved;
+  return window.navigator.language.toLowerCase().startsWith("en") ? "en" : "ko";
+};
+
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const [language, setLanguage] = useState<LanguageMode>(detectLanguage);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, locale);
-    document.documentElement.lang = locale;
-  }, [locale]);
+    const loadProfileLanguage = async () => {
+      if (!supabase || !isSupabaseConfigured) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) return;
 
-  const value = useMemo<LanguageContextValue>(
-    () => ({
-      locale,
-      setLocale,
-      toggleLocale: () => setLocale((prev) => (prev === "ko" ? "en" : "ko")),
-      tx: (ko, en) => (locale === "ko" ? ko : en),
-    }),
-    [locale],
-  );
+      const { data } = await supabase
+        .from("user_profiles")
+        .select("preferred_language")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-  return (
-    <LanguageContext.Provider value={value}>
-      {children}
-      <LanguageSwitcher />
-    </LanguageContext.Provider>
-  );
-}
+      if (data?.preferred_language === "ko" || data?.preferred_language === "en") {
+        setLanguage(data.preferred_language);
+      }
+    };
 
-function LanguageSwitcher() {
-  const { locale, setLocale, tx } = useLanguage();
+    void loadProfileLanguage();
+  }, []);
 
-  return (
-    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-1 rounded-full border border-slate-300 bg-white/95 p-1 shadow-lg backdrop-blur">
-      <button
-        type="button"
-        onClick={() => setLocale("en")}
-        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-          locale === "en" ? "bg-blue-600 text-white" : "text-slate-700 hover:bg-slate-100"
-        }`}
-        aria-pressed={locale === "en"}
-      >
-        English
-      </button>
-      <button
-        type="button"
-        onClick={() => setLocale("ko")}
-        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-          locale === "ko" ? "bg-blue-600 text-white" : "text-slate-700 hover:bg-slate-100"
-        }`}
-        aria-pressed={locale === "ko"}
-      >
-        한국어
-      </button>
-      <span className="sr-only">{tx("언어 변경", "Change language")}</span>
-    </div>
-  );
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, language);
+    document.documentElement.lang = language === "ko" ? "ko" : "en";
+
+    const saveProfileLanguage = async () => {
+      if (!supabase || !isSupabaseConfigured) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) return;
+
+      await supabase.from("user_profiles").upsert(
+        {
+          user_id: userId,
+          preferred_language: language,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+    };
+
+    void saveProfileLanguage();
+  }, [language]);
+
+  const value = useMemo(() => ({ language, setLanguage }), [language]);
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
 export function useLanguage() {

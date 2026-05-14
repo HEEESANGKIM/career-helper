@@ -1,0 +1,8 @@
+[
+  { "risk": "hiring freeze", "impact": "fewer entry-level openings", "prevention": "keep a wider company list and include stable industries" },
+  { "risk": "weak portfolio", "impact": "lower callback rate", "prevention": "build one targeted project with measurable evidence" },
+  { "risk": "interview failure", "impact": "applications do not convert", "prevention": "practice 5 mock interviews and prepare 3 STAR stories" },
+  { "risk": "burnout", "impact": "quality drops across applications and learning", "prevention": "use a weekly plan with one main focus" },
+  { "risk": "visa uncertainty", "impact": "narrows employer options", "prevention": "prioritize employers with compliant sponsorship history when applicable" },
+  { "risk": "skill mismatch", "impact": "resume does not match role requirements", "prevention": "map 10 job descriptions and close repeated gaps" }
+]

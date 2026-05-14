@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { languageName, parseLanguage } from "@/lib/evaluation-server";
 
 export const runtime = "nodejs";
 
@@ -77,6 +78,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
+  const language = parseLanguage(body?.language);
+  const isEn = language === "en";
   const resumeText = typeof body?.resumeText === "string" ? body.resumeText.trim() : "";
   const jobDescription = typeof body?.jobDescription === "string" ? body.jobDescription.trim() : "";
   const requestedTone = typeof body?.tone === "string" ? body.tone.trim() : "professional";
@@ -94,45 +97,83 @@ export async function POST(request: NextRequest) {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const profileContext = [
-    `이름: ${profile?.full_name ?? ""}`,
-    `학교: ${profile?.school_name ?? ""}`,
-    `학력: ${profile?.education_level ?? ""}`,
-    `전공: ${profile?.major ?? ""}`,
-    `학점: ${profile?.gpa_score ?? ""} / ${profile?.gpa_scale ?? ""}`,
-    `핵심스킬: ${profile?.core_skills ?? ""}`,
-    `기술스택: ${profile?.tech_stack ?? ""}`,
-    `직무자격증: ${profile?.role_certifications ?? ""}`,
-    `어학: ${profile?.language_test_name ?? ""} ${profile?.language_test_score ?? ""}`,
-    `희망직무: ${profile?.target_role ?? ""}`,
-    `경험요약: ${profile?.experience_summary ?? ""}`,
-  ].join("\n");
+  const profileContext = isEn
+    ? [
+        `Name: ${profile?.full_name ?? ""}`,
+        `School: ${profile?.school_name ?? ""}`,
+        `Education level: ${profile?.education_level ?? ""}`,
+        `Major: ${profile?.major ?? ""}`,
+        `GPA: ${profile?.gpa_score ?? ""} / ${profile?.gpa_scale ?? ""}`,
+        `Core skills: ${profile?.core_skills ?? ""}`,
+        `Tech stack: ${profile?.tech_stack ?? ""}`,
+        `Role certifications: ${profile?.role_certifications ?? ""}`,
+        `Language tests: ${profile?.language_test_name ?? ""} ${profile?.language_test_score ?? ""}`,
+        `Target role: ${profile?.target_role ?? ""}`,
+        `Experience summary: ${profile?.experience_summary ?? ""}`,
+      ].join("\n")
+    : [
+        `이름: ${profile?.full_name ?? ""}`,
+        `학교: ${profile?.school_name ?? ""}`,
+        `학력: ${profile?.education_level ?? ""}`,
+        `전공: ${profile?.major ?? ""}`,
+        `학점: ${profile?.gpa_score ?? ""} / ${profile?.gpa_scale ?? ""}`,
+        `핵심스킬: ${profile?.core_skills ?? ""}`,
+        `기술스택: ${profile?.tech_stack ?? ""}`,
+        `직무자격증: ${profile?.role_certifications ?? ""}`,
+        `어학: ${profile?.language_test_name ?? ""} ${profile?.language_test_score ?? ""}`,
+        `희망직무: ${profile?.target_role ?? ""}`,
+        `경험요약: ${profile?.experience_summary ?? ""}`,
+      ].join("\n");
 
-  const toneInstruction =
-    tone === "realistic"
+  const toneInstruction = isEn
+    ? tone === "realistic"
+      ? "Write realistically: no exaggeration or guessing; center on verifiable facts/experience; state honest improvement plans where evidence is thin."
+      : "Be concrete without exaggeration."
+    : tone === "realistic"
       ? "현실적으로 작성: 과장·추정 표현 금지, 검증 가능한 사실/경험 중심, 부족한 부분은 솔직히 보완 계획으로 표현."
       : "과장 없이 구체적으로 작성.";
 
-  const prompt = [
-    "너는 취업 코치다. 한국어로 커버레터 초안을 작성해라.",
-    `톤: ${tone}`,
-    toneInstruction,
-    "",
-    "[지원자 프로필]",
-    profileContext,
-    "",
-    "[이력서 텍스트]",
-    resumeText,
-    "",
-    "[지원 직무/공고 설명]",
-    jobDescription || "미입력",
-    "",
-    "요구사항:",
-    "1) 1문단 도입 + 2문단 본문 + 1문단 마무리",
-    "2) 지원자 강점 3가지를 근거와 함께 포함",
-    "3) 주장마다 근거를 붙이고, 근거가 약한 부분은 보완 계획으로 정리",
-    "4) 마지막에 3줄 요약 bullet 포함",
-  ].join("\n");
+  const prompt = isEn
+    ? [
+        `You are a career coach. Write a complete cover letter draft in ${languageName(language)}.`,
+        `Tone: ${tone}`,
+        toneInstruction,
+        "",
+        "[Candidate profile]",
+        profileContext,
+        "",
+        "[Resume text]",
+        resumeText,
+        "",
+        "[Target role / job description]",
+        jobDescription || "Not provided",
+        "",
+        "Requirements:",
+        "1) One intro paragraph, two body paragraphs, one closing paragraph",
+        "2) Include three strengths with evidence",
+        "3) Attach evidence to each claim; where evidence is weak, frame an improvement plan",
+        "4) End with a three-line bullet summary",
+      ].join("\n")
+    : [
+        `너는 취업 코치다. ${languageName(language)}로 커버레터 초안을 작성해라.`,
+        `톤: ${tone}`,
+        toneInstruction,
+        "",
+        "[지원자 프로필]",
+        profileContext,
+        "",
+        "[이력서 텍스트]",
+        resumeText,
+        "",
+        "[지원 직무/공고 설명]",
+        jobDescription || "미입력",
+        "",
+        "요구사항:",
+        "1) 1문단 도입 + 2문단 본문 + 1문단 마무리",
+        "2) 지원자 강점 3가지를 근거와 함께 포함",
+        "3) 주장마다 근거를 붙이고, 근거가 약한 부분은 보완 계획으로 정리",
+        "4) 마지막에 3줄 요약 bullet 포함",
+      ].join("\n");
 
   const response = await openai.responses.create({
     model: "gpt-4o-mini",

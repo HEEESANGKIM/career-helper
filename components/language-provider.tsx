@@ -15,10 +15,10 @@ const LanguageContext = createContext<LanguageContextValue | null>(null);
 const STORAGE_KEY = "language-mode";
 
 const detectLanguage = (): LanguageMode => {
-  if (typeof window === "undefined") return "ko";
+  if (typeof window === "undefined") return "en";
   const saved = window.localStorage.getItem(STORAGE_KEY);
   if (saved === "ko" || saved === "en") return saved;
-  return window.navigator.language.toLowerCase().startsWith("en") ? "en" : "ko";
+  return "en";
 };
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {

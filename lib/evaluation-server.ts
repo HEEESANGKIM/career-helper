@@ -24,6 +24,10 @@ const createAuthedUserClient = (token: string) =>
 
 export const parseLanguage = (value: unknown): LanguageMode => (String(value ?? "").toLowerCase() === "en" ? "en" : "ko");
 
+/** `?language=en` on GET routes (default Korean). */
+export const parseLanguageFromRequest = (request: NextRequest): LanguageMode =>
+  request.nextUrl.searchParams.get("language") === "en" ? "en" : "ko";
+
 export const cleanText = (value: unknown, max = 5000) =>
   String(value ?? "")
     .replace(/\s+/g, " ")

@@ -16,12 +16,12 @@ const themeInitScript = `
 (() => {
   try {
     const saved = window.localStorage.getItem("pathmate-theme");
-    const theme = saved === "light" ? "light" : "dark";
+    const theme = saved === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   } catch {
-    document.documentElement.dataset.theme = "dark";
-    document.documentElement.style.colorScheme = "dark";
+    document.documentElement.dataset.theme = "light";
+    document.documentElement.style.colorScheme = "light";
   }
 })();
 `;
@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
+    <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

@@ -182,7 +182,7 @@ export default function MatchingPage() {
       if (!token) return;
 
       setRealJobsLoading(true);
-      const res = await fetch("/api/matching-real-jobs", {
+      const res = await fetch(`/api/matching-real-jobs?language=${language}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -203,7 +203,7 @@ export default function MatchingPage() {
     };
 
     void load();
-  }, [t]);
+  }, [t, language]);
 
   const loadJobDetailAnalysis = async (job: RealJob, idx: number) => {
     if (!profile) return;
@@ -229,6 +229,7 @@ export default function MatchingPage() {
         company: job.company,
         summary: `${job.summary} | ${t("공개 경쟁 지표", "Public competition signal")}: ${job.competitionText}`,
         profileSummary,
+        language,
       }),
     });
     const json = await res.json();

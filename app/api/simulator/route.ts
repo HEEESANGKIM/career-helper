@@ -259,6 +259,9 @@ const generateVirtualPostings = async (
         ? "Make the postings practical: realistic screening criteria, applicant pool pressure, and role-specific requirements."
         : "실전처럼 느껴지도록 직무별 요구사항, 서류/자소서/면접 평가 포인트, 경쟁 풀 압박을 현실적으로 구성한다.",
       language === "en" ? "Return JSON only." : "반드시 JSON만 반환한다.",
+      language === "en"
+        ? "The simulator UI is in English: make every en field read like native English; ko fields should still be coherent Korean."
+        : "시뮬레이터 UI가 한국어다: ko 필드는 자연스러운 한국어로, en 필드도 문맥에 맞는 영어로 작성한다.",
       `profileSummary: ${profileSummary || "not provided"}`,
       `targetRole: ${targetRole || "not provided"}`,
       "schema:",
@@ -408,6 +411,9 @@ export async function POST(request: NextRequest) {
         language === "en"
           ? "Return JSON only. Keep wording natural and specific to the role."
           : "반드시 JSON만 반환하고, 직무 맥락에 맞게 구체적으로 작성한다.",
+        language === "en"
+          ? "All string fields in the JSON (question, rubric, followUps, expectedSignals) must be in English."
+          : "JSON의 모든 문자열 필드(질문, 루브릭, 후속 질문, 기대 신호)는 반드시 한국어로 작성한다.",
         `role: ${role}`,
         `level: ${level}`,
         "schema:",
@@ -462,6 +468,9 @@ export async function POST(request: NextRequest) {
           ? "Use rubric alignment, technical depth, clarity, and measurable impact."
           : "루브릭 정합성, 기술 깊이, 전달력, 정량 성과를 기준으로 평가한다.",
         language === "en" ? "Return JSON only." : "반드시 JSON만 반환한다.",
+        language === "en"
+          ? "All explanatory strings in the JSON (summary, strengths, improvements, nextStepAdvice) must be in English."
+          : "summary, strengths, improvements, nextStepAdvice 등 JSON 안의 모든 설명 문자열은 반드시 한국어로 작성한다. (hiringSignal 값은 지정된 코드만 사용)",
         "schema:",
         `{
   "score": number,

@@ -110,6 +110,7 @@ export default function CoverLetterPage() {
         resumeText,
         jobDescription,
         tone,
+        language,
       }),
     });
     const json = await res.json();

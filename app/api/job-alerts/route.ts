@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     company,
     title: `${company} 신입/주니어 채용 공고 업데이트`,
     postedAt: new Date(Date.now() - idx * 86400000).toISOString().slice(0, 10),
-    url: "https://www.saramin.co.kr/",
+    url: "https://www.jobkorea.co.kr/",
   }));
 
   return NextResponse.json({ items });

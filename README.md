@@ -45,6 +45,25 @@ And a **Portfolio Optimizer** that generates tailored cover letter drafts and su
 - **Deployment Platform:** Vercel (Frontend & Serverless Functions)
 - **Database Hosting:** Supabase Cloud
 
+### Vercel environment variables
+
+In [Vercel](https://vercel.com) → your project → **Settings** → **Environment Variables**, set **exactly** these names (values from Supabase / OpenAI dashboards). Apply to **Production**, **Preview**, and **Development** as needed.
+
+| Name | Required | Notes |
+|------|----------|--------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | `anon` `public` key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | `service_role` key — **server only**, never expose to the browser |
+| `OPENAI_API_KEY` | Yes | OpenAI secret key — **server only** |
+
+Optional: `OPENAI_EVALUATION_MODEL` (defaults to `gpt-4.1-mini` in evaluation routes).
+
+**Do not use** `NEXT_PUBLIC_OPENAI_API_KEY` — the app reads `OPENAI_API_KEY` only. A `NEXT_PUBLIC_` OpenAI key is ignored and would leak the key to clients.
+
+After changing variables, **Redeploy** the latest deployment (or push a new commit) so serverless functions pick up the new values.
+
+See `.env.example` in the repo root for a local template.
+
 ---
 
 ## 6. How to Run and View the Project
@@ -70,12 +89,19 @@ npm install
 ```
 
 3. Environment Variables:
-To run the project locally with full AI and Database functionality, you must create a .env.local file in the root directory and add the following keys:
+Copy `.env.example` to `.env.local` and fill in values (no spaces around `=`):
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=supabase_key
-OPENAI_API_KEY=openai_key
+cp .env.example .env.local   # Windows: copy .env.example .env.local
 ```
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+OPENAI_API_KEY=sk-...
+```
+
+`SUPABASE_SERVICE_ROLE_KEY` is required for Live Job matching, cover letters, job alerts, and other server APIs. Use the same four variables on Vercel (see **§5 Deployment**).
 
 4. Building and Running:
 

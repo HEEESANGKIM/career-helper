@@ -7,17 +7,17 @@ export const runtime = "nodejs";
 
 type HiringStatus = "open" | "unknown";
 type CompetitionLevel = "low" | "moderate" | "high" | "unknown";
-type SourceKind = "saramin_api" | "verified_web_search";
+type SourceKind = "verified_web_search";
 
 type EvidenceSource = {
   label: string;
   url: string;
-  sourceType: "official_api" | "job_posting" | "search_result";
+  sourceType: "job_posting" | "search_result";
   verifiedAt: string;
 };
 
 type MarketInsights = {
-  source: "saramin_api" | "verified_web_search" | "cache";
+  source: "verified_web_search" | "cache";
   searchedAt: string;
   postingPoolSize: number | null;
   postingsChecked: number;
@@ -76,61 +76,7 @@ type CoverLetterRow = {
   created_at?: string | null;
 };
 
-type NamedValue = {
-  name?: string | number | null;
-  code?: string | number | null;
-  min?: string | number | null;
-  max?: string | number | null;
-};
-
-type SaraminJob = {
-  id?: string | number | null;
-  url?: string | null;
-  active?: string | number | null;
-  company?: {
-    detail?: {
-      name?: string | null;
-      href?: string | null;
-    };
-    name?: string | null;
-  };
-  position?: {
-    title?: string | null;
-    industry?: NamedValue | string | null;
-    location?: NamedValue | string | null;
-    "job-type"?: NamedValue | string | null;
-    "job-mid-code"?: NamedValue | string | null;
-    "job-code"?: NamedValue | string | null;
-    "experience-level"?: NamedValue | string | null;
-    "required-education-level"?: NamedValue | string | null;
-  };
-  keyword?: string | null;
-  salary?: NamedValue | string | null;
-  "posting-date"?: string | null;
-  "posting-timestamp"?: string | number | null;
-  "expiration-date"?: string | null;
-  "expiration-timestamp"?: string | number | null;
-  "close-type"?: NamedValue | string | null;
-  "read-cnt"?: string | number | null;
-  "apply-cnt"?: string | number | null;
-};
-
-type SaraminResponse = {
-  jobs?: {
-    count?: string | number | null;
-    start?: string | number | null;
-    total?: string | number | null;
-    job?: SaraminJob | SaraminJob[];
-  };
-  result?: {
-    code?: string | number | null;
-    message?: string | null;
-  };
-};
-
 const TRUSTED_JOB_DOMAINS = [
-  "saramin.co.kr",
-  "www.saramin.co.kr",
   "jobkorea.co.kr",
   "www.jobkorea.co.kr",
   "wanted.co.kr",
@@ -139,7 +85,6 @@ const TRUSTED_JOB_DOMAINS = [
   "www.incruit.com",
   "catch.co.kr",
   "www.catch.co.kr",
-  "jumpit.saramin.co.kr",
   "rocketpunch.com",
   "www.rocketpunch.com",
   "peoplenjob.com",
@@ -153,7 +98,6 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-const saraminAccessKey = process.env.SARAMIN_ACCESS_KEY?.trim() || process.env.SARAMIN_API_KEY?.trim();
 
 const missingCoreConfig = !supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey;
 
@@ -202,33 +146,6 @@ const readNumber = (value: unknown): number | null => {
   if (typeof value !== "string") return null;
   const parsed = Number(value.replace(/,/g, "").trim());
   return Number.isFinite(parsed) ? parsed : null;
-};
-
-const readName = (value: unknown): string => {
-  if (!value) return "";
-  if (typeof value === "string" || typeof value === "number") return cleanText(value);
-  if (typeof value === "object" && "name" in value) return cleanText((value as NamedValue).name);
-  return "";
-};
-
-const normalizeDate = (dateLike: unknown, timestampLike?: unknown) => {
-  const raw = cleanText(dateLike);
-  const datePart = raw.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
-  if (datePart) return datePart;
-
-  const timestamp = readNumber(timestampLike);
-  if (!timestamp) return "unknown";
-
-  try {
-    return new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Asia/Seoul",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date(timestamp * 1000));
-  } catch {
-    return new Date(timestamp * 1000).toISOString().slice(0, 10);
-  }
 };
 
 const parsePublishedDate = (value: string) => {
@@ -378,7 +295,7 @@ const getRecommendedRoles = async (
         ? [
             "From the applicant profile and cover letter text, extract only realistic job search keywords for JSON output.",
             "Do not invent job titles or exaggerate roles.",
-            "Return 3-5 short keywords that work on major Korean job boards (Saramin, JobKorea, Wanted, etc.). Keywords may be Korean or English as commonly used in postings.",
+            "Return 3-5 short keywords that work on major Korean job boards (JobKorea, Wanted, Incruit, Catch, RocketPunch, etc.). Keywords may be Korean or English as commonly used in postings.",
             `All string values in the JSON must be in ${languageName(lang)} (use English role phrases in the roles array).`,
             'Schema: {"roles":["..."]}',
             "",
@@ -407,13 +324,6 @@ const getRecommendedRoles = async (
   } catch {
     return fallback;
   }
-};
-
-const buildSearchQueries = (roles: string[], profile: ProfileRow | null) => {
-  const coreTerms = splitTerms(profile?.tech_stack, profile?.core_skills).slice(0, 4);
-  const base = roles.length > 0 ? roles : fallbackRoles(profile, []);
-  const queries = base.map((role) => [role, ...coreTerms.slice(0, 2)].join(" ").trim());
-  return [...new Set(queries.filter(Boolean))].slice(0, 4);
 };
 
 const scoreJob = (
@@ -461,109 +371,6 @@ const toEvidence = (label: string, url: string, sourceType: EvidenceSource["sour
   sourceType,
   verifiedAt: nowIso(),
 });
-
-const saraminJobToRealJob = (job: SaraminJob, profile: ProfileRow | null, lang: LanguageMode): RealJob | null => {
-  const url = cleanText(job.url);
-  if (!url || !isTrustedJobUrl(url)) return null;
-  if (String(job.active ?? "") !== "1") return null;
-
-  const position = job.position ?? {};
-  const title = cleanText(position.title);
-  const company = cleanText(job.company?.detail?.name ?? job.company?.name);
-  if (!title || !company) return null;
-
-  const publishedAt = normalizeDate(job["posting-date"], job["posting-timestamp"]);
-  if (!isRecentPosting(publishedAt)) return null;
-
-  const location = readName(position.location) || unknownLocation(lang);
-  const jobCode = readName(position["job-code"]) || readName(position["job-mid-code"]);
-  const experience = readName(position["experience-level"]);
-  const education = readName(position["required-education-level"]);
-  const jobType = readName(position["job-type"]);
-  const salary = readName(job.salary);
-  const keyword = cleanText(job.keyword);
-  const applicantCount = readNumber(job["apply-cnt"]);
-  const viewCount = readNumber(job["read-cnt"]);
-  const competitionLevel = getCompetitionLevel(applicantCount);
-  const deadlineDate = normalizeDate(job["expiration-date"], job["expiration-timestamp"]);
-  const closeType = readName(job["close-type"]);
-  const L = (ko: string, en: string) => (lang === "en" ? en : ko);
-  const summary = [
-    jobCode && `${L("직무", "Role")}: ${jobCode}`,
-    experience && `${L("경력", "Experience")}: ${experience}`,
-    education && `${L("학력", "Education")}: ${education}`,
-    jobType && `${L("형태", "Type")}: ${jobType}`,
-    salary && `${L("연봉", "Salary")}: ${salary}`,
-    keyword && `${L("키워드", "Keywords")}: ${limitText(keyword, 90)}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  const baseJob = {
-    title,
-    company,
-    location,
-    url,
-    summary: summary || L("공식 API에서 확인된 채용 공고입니다.", "Hiring posting verified via the official API."),
-    publishedAt,
-    deadline: deadlineDate !== "unknown" ? deadlineDate : closeType || "unknown",
-    hiringStatus: "open" as const,
-    source: "saramin_api" as const,
-    sourceLabel: L("사람인 공식 API", "Saramin official API"),
-    applicantCount,
-    viewCount,
-    competitionLevel,
-    competitionText: competitionText(applicantCount, viewCount, undefined, lang),
-    evidence: [toEvidence(L("사람인 채용공고 API", "Saramin job posting API"), url, "official_api")],
-  };
-  const scored = scoreJob(baseJob, profile, lang);
-  return { ...baseJob, ...scored };
-};
-
-const fetchSaraminJobs = async (queries: string[], profile: ProfileRow | null, lang: LanguageMode) => {
-  if (!saraminAccessKey) return { items: [] as RealJob[], total: null as number | null };
-
-  const seen = new Map<string, RealJob>();
-  let largestTotal: number | null = null;
-
-  for (const query of queries.slice(0, 4)) {
-    const url = new URL("https://oapi.saramin.co.kr/job-search");
-    url.searchParams.set("access-key", saraminAccessKey);
-    url.searchParams.set("keywords", query);
-    url.searchParams.set("fields", "posting-date,expiration-date,count");
-    url.searchParams.set("start", "0");
-    url.searchParams.set("count", "30");
-    url.searchParams.set("sort", "pd");
-
-    const response = await fetch(url, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
-
-    if (!response.ok) continue;
-
-    const data = (await response.json().catch(() => null)) as SaraminResponse | null;
-    const errorMessage = data?.result?.message;
-    if (errorMessage) continue;
-
-    const total = readNumber(data?.jobs?.total);
-    if (total !== null) largestTotal = Math.max(largestTotal ?? 0, total);
-
-    const rawJobs = data?.jobs?.job ? (Array.isArray(data.jobs.job) ? data.jobs.job : [data.jobs.job]) : [];
-    rawJobs
-      .map((item) => saraminJobToRealJob(item, profile, lang))
-      .filter((item): item is RealJob => Boolean(item))
-      .forEach((item) => {
-        if (!seen.has(item.url)) seen.set(item.url, item);
-      });
-  }
-
-  const items = [...seen.values()]
-    .sort((a, b) => b.priorityScore - a.priorityScore || (b.applicantCount ?? -1) - (a.applicantCount ?? -1))
-    .slice(0, MAX_RESULTS);
-
-  return { items, total: largestTotal };
-};
 
 const verifyLiveJobPosting = async (job: RealJob) => {
   if (!isTrustedJobUrl(job.url) || isLikelyClosed(job)) return false;
@@ -645,7 +452,7 @@ const fetchVerifiedWebJobs = async (
       "절대 공고를 새로 만들지 않는다. 검색 결과나 공고 원문에서 확인되지 않는 값은 null 또는 unknown으로 둔다.",
       "지원자수(applicantCount), 조회수(viewCount)는 공고 원문/검색 결과에서 숫자가 보일 때만 입력하고 추정하지 않는다.",
       "마감/종료/closed/expired 공고는 제외한다.",
-      "허용 도메인: saramin.co.kr, jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, jumpit.saramin.co.kr, rocketpunch.com, peoplenjob.com",
+      "허용 도메인: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
       "JSON 객체만 출력한다.",
       `summary 필드의 문장은 반드시 ${languageName(lang)}로 작성한다.`,
     ],
@@ -655,7 +462,7 @@ const fetchVerifiedWebJobs = async (
       "Never fabricate postings. Use null or unknown for any field not confirmed in search results or posting text.",
       "Fill applicantCount and viewCount only when explicit numbers appear; do not estimate.",
       "Exclude closed, expired, or 마감 postings.",
-      "Allowed domains: saramin.co.kr, jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, jumpit.saramin.co.kr, rocketpunch.com, peoplenjob.com",
+      "Allowed domains: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
       "Output a JSON object only.",
       `Write every human-readable string in the JSON (especially summary) in ${languageName(lang)}.`,
     ],
@@ -731,14 +538,10 @@ const buildMarketInsights = (
   const competitionLevel = getCompetitionLevel(averageApplicants);
   const sourceName =
     lang === "en"
-      ? source === "saramin_api"
-        ? "Saramin official API"
-        : source === "cache"
+      ? source === "cache"
           ? "Cached verified results"
           : "Verified web search"
-      : source === "saramin_api"
-        ? "사람인 공식 API"
-        : source === "cache"
+      : source === "cache"
           ? "저장된 검증 결과"
           : "검증된 웹 검색";
 
@@ -788,10 +591,10 @@ const normalizeCachedItem = (raw: unknown, lang: LanguageMode): RealJob | null =
       publishedAt: cleanText(item.publishedAt) || "unknown",
       deadline: cleanText(item.deadline) || "unknown",
       hiringStatus: item.hiringStatus === "open" ? "open" : "unknown",
-      source: item.source === "saramin_api" ? "saramin_api" : "verified_web_search",
+      source: "verified_web_search",
       sourceLabel:
         cleanText(item.sourceLabel) ||
-        (item.source === "saramin_api" ? L("사람인 공식 API", "Saramin official API") : L("검증된 웹 검색", "Verified web search")),
+        L("검증된 웹 검색", "Verified web search"),
       fitScore: clamp(readNumber(item.fitScore) ?? 50, 0, 100),
       priorityScore: clamp(readNumber(item.priorityScore) ?? readNumber(item.fitScore) ?? 50, 0, 100),
       applicantCount: readNumber(item.applicantCount),
@@ -846,16 +649,13 @@ const relocalizeCachedJob = (item: RealJob, profile: ProfileRow | null, lang: La
       item.location === UNKNOWN_LOCATION_KO || item.location === UNKNOWN_LOCATION_EN
         ? unknownLocation(lang)
         : item.location,
-    sourceLabel:
-      item.source === "saramin_api" ? L("사람인 공식 API", "Saramin official API") : L("검증된 웹 검색", "Verified web search"),
+    sourceLabel: L("검증된 웹 검색", "Verified web search"),
     evidence: (item.evidence ?? []).map((e) => ({
       ...e,
       label:
         e.label === "채용공고 원문" || e.label === "Job posting source"
           ? L("채용공고 원문", "Job posting source")
-          : e.label === "사람인 채용공고 API" || e.label === "Saramin job posting API"
-            ? L("사람인 채용공고 API", "Saramin job posting API")
-            : e.label,
+          : e.label,
     })),
   };
 };
@@ -919,7 +719,6 @@ export async function GET(request: NextRequest) {
     if (cachedResponse) {
       const verified = await Promise.all(
         cachedResponse.items.map(async (item) => {
-          if (item.source === "saramin_api") return item;
           const ok = await verifyLiveJobPosting(item);
           return ok ? item : null;
         }),
@@ -949,28 +748,18 @@ export async function GET(request: NextRequest) {
   }
 
   const recommendedRoles = await getRecommendedRoles(typedProfile, typedCoverLetters, language);
-  const queries = buildSearchQueries(recommendedRoles, typedProfile);
 
   let source: MarketInsights["source"] = "verified_web_search";
   let postingPoolSize: number | null = null;
-  let items: RealJob[] = [];
-
-  const saraminResult = await fetchSaraminJobs(queries, typedProfile, language);
-  if (saraminResult.items.length > 0) {
-    source = "saramin_api";
-    postingPoolSize = saraminResult.total;
-    items = saraminResult.items;
-  } else {
-    items = await fetchVerifiedWebJobs(recommendedRoles, typedProfile, typedCoverLetters, language);
-  }
+  let items = await fetchVerifiedWebJobs(recommendedRoles, typedProfile, typedCoverLetters, language);
 
   if (items.length === 0) {
     return NextResponse.json(
       {
         error:
           language === "en"
-            ? "No live postings met the filters (official API or verified platform URL, active, recent/accessible)."
-            : "실공고 조건(공식 API 또는 검증 가능한 채용 플랫폼 URL, 모집중, 최근/접근 가능)을 만족하는 결과를 찾지 못했습니다.",
+            ? "No live postings met the filters (verified platform URL, active, recent/accessible)."
+            : "실공고 조건(검증 가능한 채용 플랫폼 URL, 모집중, 최근/접근 가능)을 만족하는 결과를 찾지 못했습니다.",
       },
       { status: 404 },
     );

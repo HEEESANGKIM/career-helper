@@ -56,14 +56,6 @@ In [Vercel](https://vercel.com) → your project → **Settings** → **Environm
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | `service_role` key — **server only**, never expose to the browser |
 | `OPENAI_API_KEY` | Yes | OpenAI secret key — **server only** |
 
-Optional: `OPENAI_EVALUATION_MODEL` (defaults to `gpt-4.1-mini` in evaluation routes).
-
-**Do not use** `NEXT_PUBLIC_OPENAI_API_KEY` — the app reads `OPENAI_API_KEY` only. A `NEXT_PUBLIC_` OpenAI key is ignored and would leak the key to clients.
-
-After changing variables, **Redeploy** the latest deployment (or push a new commit) so serverless functions pick up the new values.
-
-See `.env.example` in the repo root for a local template.
-
 ---
 
 ## 6. How to Run and View the Project

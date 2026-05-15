@@ -82,6 +82,8 @@ export default function SettingsPage() {
   const [form, setForm] = useState<SettingsForm>(initialForm);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [message, setMessage] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountError, setAccountError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -267,6 +269,44 @@ export default function SettingsPage() {
     if (session?.access_token) await loadAlerts(session.access_token);
   };
 
+  const deleteAccount = async () => {
+    const confirmed = window.confirm(
+      t(
+        "계정과 연결된 모든 데이터(프로필, 자소서, 실공고 캐시, 평가·시뮬레이션 기록 등)가 영구 삭제됩니다. 되돌릴 수 없습니다. 계속하시겠습니까?",
+        "Your account and all related data (profile, cover letters, job cache, evaluations, simulations, etc.) will be permanently deleted. This cannot be undone. Continue?",
+      ),
+    );
+    if (!confirmed) return;
+
+    setAccountError("");
+    setDeletingAccount(true);
+
+    const session = await getSessionWithRetry();
+    const token = session?.access_token;
+    if (!token) {
+      setDeletingAccount(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    const res = await fetch("/api/account/delete", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json().catch(() => null);
+    setDeletingAccount(false);
+
+    if (!res.ok) {
+      setAccountError(json?.error ?? t("계정 삭제에 실패했습니다.", "Failed to delete account."));
+      return;
+    }
+
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    window.location.href = "/login";
+  };
+
   return (
     <PageShell maxWidth="max-w-7xl">
       <PageHeader
@@ -291,6 +331,27 @@ export default function SettingsPage() {
                 <InfoRow label={t("이메일", "Email")} value={email || "-"} />
                 <InfoRow label={t("로그인 방식", "Login method")} value={provider} />
                 <InfoRow label={t("가입일", "Joined")} value={joinedAt} />
+              </div>
+              <div className="mt-6 border-t border-[var(--line)] pt-5">
+                <p className="text-xs leading-5 text-[var(--muted)]">
+                  {t(
+                    "계정을 삭제하면 프로필, 자소서, 매칭 캐시, 평가·인터뷰·시뮬레이션 기록이 모두 삭제됩니다.",
+                    "Deleting your account removes your profile, cover letters, matching cache, and all evaluation, interview, and simulation records.",
+                  )}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void deleteAccount()}
+                  disabled={deletingAccount}
+                  className="danger-btn mt-4 w-full px-4 py-2.5 text-sm disabled:opacity-60 sm:w-auto"
+                >
+                  {deletingAccount ? t("삭제 중...", "Deleting...") : t("계정 삭제", "Delete account")}
+                </button>
+                {accountError ? (
+                  <Notice className="mt-3" tone="warning">
+                    {accountError}
+                  </Notice>
+                ) : null}
               </div>
             </PagePanel>
 

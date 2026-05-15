@@ -130,6 +130,7 @@ body {
 .page-kicker,
 .primary-btn,
 .secondary-btn,
+.danger-btn,
 .chip,
 .accent-pill {
   word-break: keep-all;
@@ -693,7 +694,8 @@ a {
 }
 
 .primary-btn,
-.secondary-btn {
+.secondary-btn,
+.danger-btn {
   display: inline-flex;
   min-height: 40px;
   align-items: center;
@@ -739,6 +741,26 @@ a {
     0 0 0 1px color-mix(in srgb, var(--accent-2) 48%, var(--line));
 }
 
+.danger-btn {
+  border: 1px solid color-mix(in srgb, var(--danger) 72%, #7f1d1d);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--danger) 92%, white 8%), var(--danger));
+  color: #ffffff;
+  box-shadow:
+    0 14px 32px color-mix(in srgb, var(--danger) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.danger-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+}
+
+.danger-btn:focus-visible {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--danger) 22%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--danger) 55%, var(--line));
+}
+
 .secondary-btn {
   border: 1px solid var(--line);
   background:
@@ -758,6 +780,7 @@ a {
 
 .primary-btn:disabled,
 .secondary-btn:disabled,
+.danger-btn:disabled,
 .field:disabled {
   cursor: not-allowed;
   opacity: 0.55;

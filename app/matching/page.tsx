@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -79,16 +79,22 @@ export default function MatchingPage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [jobPool, setJobPool] = useState<RealJob[]>([]);
+  const [poolIndex, setPoolIndex] = useState(0);
   const [realJobs, setRealJobs] = useState<RealJob[]>([]);
   const [recommendedRoles, setRecommendedRoles] = useState<string[]>([]);
   const [realJobsSource, setRealJobsSource] = useState("");
   const [marketInsights, setMarketInsights] = useState<MarketInsights | null>(null);
   const [realJobsLoading, setRealJobsLoading] = useState(false);
+  const [realJobsRefreshing, setRealJobsRefreshing] = useState(false);
   const [realJobsMessage, setRealJobsMessage] = useState("");
+  const [refreshError, setRefreshError] = useState("");
+  const [poolNote, setPoolNote] = useState("");
   const [detailLoadingKey, setDetailLoadingKey] = useState("");
   const [detailAnalysis, setDetailAnalysis] = useState<JobDetailAnalysis | null>(null);
   const [detailJob, setDetailJob] = useState<RealJob | null>(null);
   const [applicationStatuses, setApplicationStatuses] = useState<Record<string, string>>({});
+  const jobsFetchInFlightRef = useRef(false);
 
   const formatNumber = (value: number | null | undefined) => {
     if (typeof value !== "number") return t("미공개", "Not public");
@@ -139,6 +145,114 @@ export default function MatchingPage() {
     };
   }, [detailJob, t]);
 
+  const applyJobPoolResponse = useCallback((json: Record<string, unknown>) => {
+    const pool = (Array.isArray(json.pool) ? json.pool : json.items) as RealJob[];
+    const index =
+      typeof json.poolIndex === "number"
+        ? json.poolIndex
+        : pool.length > 0
+          ? 0
+          : 0;
+    const safeIndex = pool.length > 0 ? Math.min(Math.max(0, index), pool.length - 1) : 0;
+    setJobPool(pool);
+    setPoolIndex(safeIndex);
+    setRealJobs(pool[safeIndex] ? [pool[safeIndex]] : []);
+    setRecommendedRoles((json.recommendedRoles as string[]) ?? []);
+    setRealJobsSource(String(json.source ?? ""));
+    setMarketInsights((json.marketInsights as MarketInsights) ?? null);
+    setPoolNote(typeof json.poolNote === "string" ? json.poolNote : "");
+  }, []);
+
+  const fetchRealJobs = useCallback(
+    async (options?: {
+      refresh?: boolean;
+      poolIndex?: number;
+      accessToken?: string;
+      excludeUrls?: string[];
+    }) => {
+      const refresh = Boolean(options?.refresh);
+      if (jobsFetchInFlightRef.current) return;
+      jobsFetchInFlightRef.current = true;
+
+      const token =
+        options?.accessToken ??
+        (await getSessionWithRetry())?.access_token;
+      if (!token) {
+        jobsFetchInFlightRef.current = false;
+        return;
+      }
+
+      if (refresh) {
+        setRealJobsRefreshing(true);
+        setRefreshError("");
+        setDetailAnalysis(null);
+        setDetailJob(null);
+      } else {
+        setRealJobsLoading(true);
+        setRealJobsMessage("");
+      }
+
+      const params = new URLSearchParams({ language });
+      if (refresh) {
+        params.set("refresh", "1");
+        const seen = (options?.excludeUrls ?? []).filter(Boolean);
+        if (seen.length > 0) {
+          params.set("exclude", seen.join(","));
+        }
+      } else if (typeof options?.poolIndex === "number") {
+        params.set("poolIndex", String(options.poolIndex));
+      }
+
+      try {
+        const res = await fetch(`/api/matching-real-jobs?${params.toString()}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const json = await res.json();
+
+        if (!res.ok) {
+          const errText = json.error ?? t("실공고 검색에 실패했습니다.", "Failed to fetch live job postings.");
+          if (refresh) {
+            setRefreshError(errText);
+          } else {
+            setRealJobsMessage(errText);
+          }
+          return;
+        }
+
+        applyJobPoolResponse(json);
+        setRealJobsMessage("");
+        setRefreshError("");
+      } finally {
+        jobsFetchInFlightRef.current = false;
+        if (refresh) {
+          setRealJobsRefreshing(false);
+        } else {
+          setRealJobsLoading(false);
+        }
+      }
+    },
+    [applyJobPoolResponse, language, t],
+  );
+
+  const showNextJobInPool = useCallback(() => {
+    if (jobPool.length === 0) return;
+    const nextIndex = poolIndex + 1;
+    if (nextIndex < jobPool.length) {
+      setPoolIndex(nextIndex);
+      setRealJobs([jobPool[nextIndex]]);
+      setRefreshError("");
+      setDetailAnalysis(null);
+      setDetailJob(null);
+      return;
+    }
+    void fetchRealJobs({
+      refresh: true,
+      excludeUrls: jobPool.map((job) => job.url).filter(Boolean),
+    });
+  }, [fetchRealJobs, jobPool, poolIndex]);
+
   useEffect(() => {
     const load = async () => {
       if (!supabase || !isSupabaseConfigured) {
@@ -177,32 +291,12 @@ export default function MatchingPage() {
 
       setLoading(false);
 
-      const token = session.access_token;
-      if (!token) return;
-
-      setRealJobsLoading(true);
-      const res = await fetch(`/api/matching-real-jobs?language=${language}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      setRealJobsLoading(false);
-
-      if (!res.ok) {
-        setRealJobsMessage(json.error ?? t("실공고 검색에 실패했습니다.", "Failed to fetch live job postings."));
-        return;
-      }
-
-      setRealJobs(json.items ?? []);
-      setRecommendedRoles(json.recommendedRoles ?? []);
-      setRealJobsSource(json.source ?? "");
-      setMarketInsights(json.marketInsights ?? null);
-      setRealJobsMessage("");
+      if (!session.access_token) return;
+      await fetchRealJobs({ accessToken: session.access_token });
     };
 
     void load();
-  }, [t, language]);
+  }, [language, fetchRealJobs]);
 
   const loadJobDetailAnalysis = async (job: RealJob, idx: number) => {
     if (!profile) return;
@@ -325,18 +419,38 @@ export default function MatchingPage() {
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-6 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <SectionTitle title={t("현재 모집중 실공고 추천", "Live Job Recommendations")} description={sourceLabel(realJobsSource)} />
+                {jobPool.length > 0 && (
+                  <p className="text-xs font-medium text-[var(--muted)]">
+                    {t("추천", "Pick")} {poolIndex + 1} / {jobPool.length}
+                  </p>
+                )}
               </div>
               <p className="mt-1 text-xs text-[var(--muted)]">
                 {sourceLabel(realJobsSource)}
+                {jobPool.length > 1
+                  ? t(" · 대기 중인 추천이 있으면 버튼 한 번으로 다음 공고를 바로 볼 수 있습니다.", " · Queued picks load instantly; a new web search runs when the queue is empty.")
+                  : ""}
               </p>
 
-              {realJobsLoading && <Notice className="mt-2">{t("실제 공고를 찾는 중입니다...", "Searching live postings...")}</Notice>}
-              {!realJobsLoading && realJobsMessage && (
+              {(realJobsLoading || realJobsRefreshing) && (
+                <Notice className="mt-2">
+                  {realJobsRefreshing
+                    ? t("다른 업무를 새로 찾는 중입니다. 10~15초 정도 걸릴 수 있습니다.", "Searching for other roles. This may take 10–15 seconds.")
+                    : t("실제 공고를 찾는 중입니다...", "Searching live postings...")}
+                </Notice>
+              )}
+              {!realJobsLoading && !realJobsRefreshing && realJobsMessage && (
                 <Notice className="mt-2" tone="warning">{realJobsMessage}</Notice>
               )}
-              {!realJobsLoading && !realJobsMessage && marketInsights && (
+              {!realJobsLoading && !realJobsRefreshing && refreshError && (
+                <Notice className="mt-2" tone="warning">{refreshError}</Notice>
+              )}
+              {!realJobsLoading && !realJobsRefreshing && poolNote && (
+                <Notice className="mt-2">{poolNote}</Notice>
+              )}
+              {!realJobsLoading && !realJobsRefreshing && !realJobsMessage && marketInsights && (
                 <div className="content-card mt-3 p-4">
                   <div className="responsive-card-grid text-sm">
                     <div className="content-card p-3 text-[var(--muted-strong)]">
@@ -360,7 +474,7 @@ export default function MatchingPage() {
                   </p>
                 </div>
               )}
-              {!realJobsLoading && !realJobsMessage && realJobs.length > 0 && (
+              {!realJobsLoading && !realJobsRefreshing && !realJobsMessage && realJobs.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {realJobs.map((job, idx) => {
                     const jobKey = `${job.url}-${idx}`;
@@ -387,9 +501,23 @@ export default function MatchingPage() {
                           </p>
                           <p className="ko-friendly mt-3 text-sm leading-6 text-[var(--muted-strong)]">{job.summary}</p>
                         </div>
-                        <a href={job.url} target="_blank" rel="noreferrer" className="secondary-btn px-2 py-1 text-xs">
-                          {t("공고 보기", "View posting")}
-                        </a>
+                        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                          <button
+                            type="button"
+                            onClick={() => void showNextJobInPool()}
+                            disabled={realJobsLoading || realJobsRefreshing}
+                            className="primary-btn px-2 py-1 text-xs disabled:opacity-60"
+                          >
+                            {realJobsRefreshing
+                              ? t("검색 중...", "Searching...")
+                              : poolIndex + 1 < jobPool.length
+                                ? t("다음 추천 보기", "Next pick")
+                                : t("새 목록 검색", "Search new picks")}
+                          </button>
+                          <a href={job.url} target="_blank" rel="noreferrer" className="secondary-btn px-2 py-1 text-xs text-center">
+                            {t("공고 보기", "View posting")}
+                          </a>
+                        </div>
                       </div>
                       <div className="responsive-card-grid mt-4 text-xs">
                         <div className="content-card p-3">

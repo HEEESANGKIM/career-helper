@@ -54,6 +54,9 @@ type RealJobResponse = {
   recommendedRoles: string[];
   marketInsights: MarketInsights;
   items: RealJob[];
+  pool: RealJob[];
+  poolIndex: number;
+  poolSize: number;
 };
 
 type ProfileRow = {
@@ -92,7 +95,9 @@ const TRUSTED_JOB_DOMAINS = [
 ];
 
 const CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-const MAX_RESULTS = 8;
+const POOL_TARGET_SIZE = 10;
+const MAX_CANDIDATES = 24;
+const MAX_POOL_SEARCH_PASSES = 3;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -393,7 +398,16 @@ const verifyLiveJobPosting = async (job: RealJob) => {
     if (!contentType.toLowerCase().includes("text/html")) return false;
 
     const html = (await response.text()).slice(0, 220000).toLowerCase();
-    const closedMarkers = ["마감된 공고", "채용공고가 마감", "접수 마감되었습니다", "모집마감", "채용마감", "expired", "closed"];
+    const closedMarkers = [
+      "마감된 공고",
+      "채용공고가 마감",
+      "접수 마감되었습니다",
+      "모집마감",
+      "채용마감",
+      "지원이 마감",
+      "recruitment has closed",
+      "this job is no longer",
+    ];
     return !closedMarkers.some((marker) => html.includes(marker));
   } catch {
     return false;
@@ -435,11 +449,34 @@ const normalizeWebItem = (raw: unknown, profile: ProfileRow | null, lang: Langua
   return { ...baseJob, ...scored };
 };
 
+const decodeUrlParam = (raw: string) => {
+  let value = cleanText(raw);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (value.startsWith("http")) return value;
+    try {
+      const next = decodeURIComponent(value);
+      if (next === value) break;
+      value = cleanText(next);
+    } catch {
+      break;
+    }
+  }
+  return value.startsWith("http") ? value : "";
+};
+
+const parseExcludeUrls = (raw: string | null) =>
+  (raw ?? "")
+    .split(",")
+    .map((part) => decodeUrlParam(part))
+    .filter(Boolean)
+    .slice(0, 12);
+
 const fetchVerifiedWebJobs = async (
   roles: string[],
   profile: ProfileRow | null,
   coverLetters: CoverLetterRow[],
   lang: LanguageMode,
+  excludeUrls: string[] = [],
 ) => {
   if (!openai) return [] as RealJob[];
 
@@ -453,6 +490,7 @@ const fetchVerifiedWebJobs = async (
       "지원자수(applicantCount), 조회수(viewCount)는 공고 원문/검색 결과에서 숫자가 보일 때만 입력하고 추정하지 않는다.",
       "마감/종료/closed/expired 공고는 제외한다.",
       "허용 도메인: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
+      `지원자 프로필에 맞는 서로 다른 채용공고를 최소 ${POOL_TARGET_SIZE}개 찾는다(회사·직무·URL이 모두 달라야 함).`,
       "JSON 객체만 출력한다.",
       `summary 필드의 문장은 반드시 ${languageName(lang)}로 작성한다.`,
     ],
@@ -463,10 +501,26 @@ const fetchVerifiedWebJobs = async (
       "Fill applicantCount and viewCount only when explicit numbers appear; do not estimate.",
       "Exclude closed, expired, or 마감 postings.",
       "Allowed domains: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
+      `Find at least ${POOL_TARGET_SIZE} different open postings that fit the applicant (distinct company, role, and URL).`,
       "Output a JSON object only.",
       `Write every human-readable string in the JSON (especially summary) in ${languageName(lang)}.`,
     ],
   );
+
+  const excludeBlock =
+    excludeUrls.length > 0
+      ? lang === "en"
+        ? [
+            "",
+            "The user already saw these postings — find different open jobs (different URLs):",
+            ...excludeUrls.map((url) => `- ${url}`),
+          ].join("\n")
+        : [
+            "",
+            "사용자가 이미 본 공고이므로 다른 모집중 공고(다른 URL)를 찾으세요:",
+            ...excludeUrls.map((url) => `- ${url}`),
+          ].join("\n")
+      : "";
 
   const tail = [
     "",
@@ -474,6 +528,7 @@ const fetchVerifiedWebJobs = async (
     lang === "en"
       ? `Profile: ${buildProfileText(profile, coverLetters).slice(0, 2400) || "Insufficient profile text"}`
       : `프로필: ${buildProfileText(profile, coverLetters).slice(0, 2400) || "프로필 정보 부족"}`,
+    excludeBlock,
     "",
     `{
   "items": [
@@ -505,8 +560,11 @@ const fetchVerifiedWebJobs = async (
     const normalized = candidates
       .map((item) => normalizeWebItem(item, profile, lang))
       .filter((item): item is RealJob => Boolean(item))
-      .filter((item) => item.hiringStatus === "open" && isRecentPosting(item.publishedAt))
-      .slice(0, MAX_RESULTS);
+      .filter(
+        (item) =>
+          (item.hiringStatus === "open" || item.hiringStatus === "unknown") && isRecentPosting(item.publishedAt),
+      )
+      .slice(0, MAX_CANDIDATES);
 
     const verified = await Promise.all(
       normalized.map(async (item) => {
@@ -515,13 +573,57 @@ const fetchVerifiedWebJobs = async (
       }),
     );
 
+    const seenUrls = new Set<string>();
     return verified
-      .filter((item): item is RealJob => Boolean(item))
+      .filter((item): item is RealJob => {
+        if (!item || seenUrls.has(item.url)) return false;
+        seenUrls.add(item.url);
+        if (excludeUrls.includes(item.url)) return false;
+        return true;
+      })
       .sort((a, b) => b.priorityScore - a.priorityScore)
-      .slice(0, MAX_RESULTS);
+      .slice(0, POOL_TARGET_SIZE);
   } catch {
     return [];
   }
+};
+
+const mergeJobPools = (existing: RealJob[], incoming: RealJob[]) => {
+  const seen = new Set(existing.map((job) => job.url));
+  const merged = [...existing];
+  for (const job of incoming) {
+    if (seen.has(job.url)) continue;
+    seen.add(job.url);
+    merged.push(job);
+  }
+  return merged.sort((a, b) => b.priorityScore - a.priorityScore).slice(0, POOL_TARGET_SIZE);
+};
+
+const buildVerifiedJobPool = async (
+  roles: string[],
+  profile: ProfileRow | null,
+  coverLetters: CoverLetterRow[],
+  lang: LanguageMode,
+  excludeUrls: string[],
+) => {
+  const roleSeeds = [...new Set([...roles, ...fallbackRoles(profile, coverLetters)])].slice(0, 8);
+  let pool: RealJob[] = [];
+  const excluded = new Set(excludeUrls);
+
+  for (let pass = 0; pass < MAX_POOL_SEARCH_PASSES && pool.length < POOL_TARGET_SIZE; pass += 1) {
+    const offset = pass * 3;
+    const searchRoles = roleSeeds.slice(offset, offset + 5);
+    if (searchRoles.length === 0) break;
+
+    const batch = await fetchVerifiedWebJobs(searchRoles, profile, coverLetters, lang, [
+      ...excluded,
+      ...pool.map((job) => job.url),
+    ]);
+    pool = mergeJobPools(pool, batch);
+    if (batch.length === 0 && pass > 0) break;
+  }
+
+  return pool;
 };
 
 const buildMarketInsights = (
@@ -615,19 +717,21 @@ const normalizeCachedItem = (raw: unknown, lang: LanguageMode): RealJob | null =
 
 const normalizeCachedResponse = (raw: unknown, searchedAt: string, lang: LanguageMode): RealJobResponse | null => {
   if (!raw || typeof raw !== "object") return null;
-  const value = raw as Partial<RealJobResponse>;
-  if (!Array.isArray(value.items) || value.items.length === 0) return null;
+  const value = raw as Partial<RealJobResponse> & { pool?: unknown[] };
+  const sourceList = Array.isArray(value.pool) && value.pool.length > 0 ? value.pool : value.items;
+  if (!Array.isArray(sourceList) || sourceList.length === 0) return null;
 
-  const items = value.items
+  const pool = sourceList
     .map((item) => normalizeCachedItem(item, lang))
     .filter((item): item is RealJob => Boolean(item?.url && isTrustedJobUrl(item.url)))
-    .slice(0, MAX_RESULTS);
+    .slice(0, POOL_TARGET_SIZE);
 
-  if (items.length === 0) return null;
+  if (pool.length === 0) return null;
 
+  const poolIndex = clamp(readNumber(value.poolIndex) ?? 0, 0, pool.length - 1);
   const cachedInsights = value.marketInsights as MarketInsights | undefined;
-  const postingPoolSize = cachedInsights?.postingPoolSize ?? null;
-  const marketInsights = buildMarketInsights("cache", items, postingPoolSize, searchedAt, lang);
+  const postingPoolSize = cachedInsights?.postingPoolSize ?? pool.length;
+  const marketInsights = buildMarketInsights("cache", pool, postingPoolSize, searchedAt, lang);
   return {
     recommendedRoles: Array.isArray(value.recommendedRoles) ? value.recommendedRoles.map(String).slice(0, 5) : [],
     marketInsights: {
@@ -635,7 +739,34 @@ const normalizeCachedResponse = (raw: unknown, searchedAt: string, lang: Languag
       source: "cache",
       searchedAt,
     },
-    items,
+    items: pool[poolIndex] ? [pool[poolIndex]] : [],
+    pool,
+    poolIndex,
+    poolSize: pool.length,
+  };
+};
+
+const buildPoolPayload = (
+  pool: RealJob[],
+  poolIndex: number,
+  recommendedRoles: string[],
+  marketInsights: MarketInsights,
+  profile: ProfileRow | null,
+  lang: LanguageMode,
+) => {
+  const localizedPool = applyAverageCompetitionText(
+    pool.map((item) => relocalizeCachedJob(item, profile, lang)),
+    marketInsights.averageApplicantsPerPosting,
+    lang,
+  );
+  const safeIndex = localizedPool.length === 0 ? 0 : clamp(poolIndex, 0, localizedPool.length - 1);
+  return {
+    recommendedRoles,
+    marketInsights,
+    pool: localizedPool,
+    poolIndex: safeIndex,
+    poolSize: localizedPool.length,
+    items: localizedPool[safeIndex] ? [localizedPool[safeIndex]] : [],
   };
 };
 
@@ -672,6 +803,9 @@ export async function GET(request: NextRequest) {
   }
 
   const language = parseLanguageFromRequest(request);
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+  const excludeUrls = forceRefresh ? parseExcludeUrls(request.nextUrl.searchParams.get("exclude")) : [];
+  const requestedPoolIndex = clamp(readNumber(request.nextUrl.searchParams.get("poolIndex")) ?? 0, 0, POOL_TARGET_SIZE - 1);
 
   const { data: cached, error: cacheError } = await serviceClient
     .from("real_job_search_cache")
@@ -714,36 +848,31 @@ export async function GET(request: NextRequest) {
   const coverLetterTime = latestCoverLetter?.created_at ? new Date(latestCoverLetter.created_at).getTime() : 0;
   const canUseCache = Boolean(cached?.results) && cacheTime >= coverLetterTime && Date.now() - cacheTime <= CACHE_MAX_AGE_MS;
 
-  if (canUseCache && cached?.results) {
+  if (!forceRefresh && canUseCache && cached?.results) {
     const cachedResponse = normalizeCachedResponse(cached.results, cacheUpdatedAt, language);
-    if (cachedResponse) {
-      const verified = await Promise.all(
-        cachedResponse.items.map(async (item) => {
-          const ok = await verifyLiveJobPosting(item);
-          return ok ? item : null;
-        }),
-      );
-      const items = verified.filter((item): item is RealJob => Boolean(item));
-      if (items.length > 0) {
-        const marketInsights = buildMarketInsights(
-          "cache",
-          items,
-          cachedResponse.marketInsights.postingPoolSize,
-          cacheUpdatedAt,
+    if (cachedResponse && cachedResponse.pool.length > 0) {
+      const poolIndex = clamp(requestedPoolIndex, 0, cachedResponse.pool.length - 1);
+      const cachedPool = cachedResponse.pool;
+      const poolNote =
+        cachedPool.length < POOL_TARGET_SIZE
+          ? language === "en"
+            ? `Showing ${cachedPool.length} cached verified posting(s). Use “Search new picks” to run a fresh search (up to ${POOL_TARGET_SIZE}).`
+            : `저장된 검증 공고 ${cachedPool.length}건입니다. ‘새 목록 검색’으로 최대 ${POOL_TARGET_SIZE}건까지 다시 찾을 수 있습니다.`
+          : undefined;
+
+      return NextResponse.json({
+        source: "cache",
+        searchedAt: cacheUpdatedAt,
+        poolNote,
+        ...buildPoolPayload(
+          cachedPool,
+          poolIndex,
+          cachedResponse.recommendedRoles,
+          cachedResponse.marketInsights,
+          typedProfile,
           language,
-        );
-        return NextResponse.json({
-          source: "cache",
-          searchedAt: cacheUpdatedAt,
-          recommendedRoles: cachedResponse.recommendedRoles,
-          marketInsights,
-          items: applyAverageCompetitionText(
-            items.map((item) => relocalizeCachedJob(item, typedProfile, language)),
-            marketInsights.averageApplicantsPerPosting,
-            language,
-          ),
-        });
-      }
+        ),
+      });
     }
   }
 
@@ -751,33 +880,47 @@ export async function GET(request: NextRequest) {
 
   let source: MarketInsights["source"] = "verified_web_search";
   let postingPoolSize: number | null = null;
-  let items = await fetchVerifiedWebJobs(recommendedRoles, typedProfile, typedCoverLetters, language);
+  const pool = await buildVerifiedJobPool(recommendedRoles, typedProfile, typedCoverLetters, language, excludeUrls);
 
-  if (items.length === 0) {
+  if (pool.length === 0) {
+    const refreshHint =
+      forceRefresh && excludeUrls.length > 0
+        ? language === "en"
+          ? " Could not find a different verified posting yet — try again in a moment."
+          : " 아직 다른 검증 공고를 찾지 못했습니다. 잠시 후 다시 시도해 주세요."
+        : "";
     return NextResponse.json(
       {
         error:
-          language === "en"
+          (language === "en"
             ? "No live postings met the filters (verified platform URL, active, recent/accessible)."
-            : "실공고 조건(검증 가능한 채용 플랫폼 URL, 모집중, 최근/접근 가능)을 만족하는 결과를 찾지 못했습니다.",
+            : "실공고 조건(검증 가능한 채용 플랫폼 URL, 모집중, 최근/접근 가능)을 만족하는 결과를 찾지 못했습니다.") + refreshHint,
       },
       { status: 404 },
     );
   }
 
-  const marketInsights = buildMarketInsights(source, items, postingPoolSize, undefined, language);
-  items = applyAverageCompetitionText(items, marketInsights.averageApplicantsPerPosting, language);
+  const marketInsights = buildMarketInsights(source, pool, postingPoolSize ?? pool.length, undefined, language);
 
   const results: RealJobResponse = {
-    recommendedRoles,
-    marketInsights,
-    items,
+    ...buildPoolPayload(pool, 0, recommendedRoles, marketInsights, typedProfile, language),
   };
+
+  if (forceRefresh) {
+    await serviceClient.from("real_job_search_cache").delete().eq("user_id", user.id);
+  }
 
   const { error: saveError } = await serviceClient.from("real_job_search_cache").upsert(
     {
       user_id: user.id,
-      results,
+      results: {
+        recommendedRoles,
+        marketInsights,
+        pool,
+        poolIndex: 0,
+        poolSize: pool.length,
+        items: pool,
+      },
       updated_at: marketInsights.searchedAt,
     },
     { onConflict: "user_id" },
@@ -787,9 +930,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: saveError.message }, { status: 500 });
   }
 
+  const poolNote =
+    pool.length < POOL_TARGET_SIZE
+      ? language === "en"
+        ? `Verified ${pool.length} live posting(s) for your profile (target up to ${POOL_TARGET_SIZE}). This is not an account limit — try filling target role/skills or run “Search new picks” again.`
+        : `프로필 기준 검증된 실공고 ${pool.length}건입니다(목표 최대 ${POOL_TARGET_SIZE}건). 계정 제한이 아니라 검색·검증 결과이니, 희망직무·스킬을 보강하거나 ‘새 목록 검색’을 다시 시도해 보세요.`
+      : undefined;
+
   return NextResponse.json({
     source,
     searchedAt: marketInsights.searchedAt,
+    poolNote,
     ...results,
   });
 }

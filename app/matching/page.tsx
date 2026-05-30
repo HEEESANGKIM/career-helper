@@ -26,12 +26,12 @@ type CompetitionLevel = "low" | "moderate" | "high" | "unknown";
 type EvidenceSource = {
   label: string;
   url: string;
-  sourceType: "official_api" | "job_posting" | "search_result";
+  sourceType: "job_posting" | "search_result";
   verifiedAt: string;
 };
 
 type MarketInsights = {
-  source: "saramin_api" | "verified_web_search" | "cache";
+  source: "verified_web_search" | "cache";
   searchedAt: string;
   postingPoolSize: number | null;
   postingsChecked: number;
@@ -52,7 +52,7 @@ type RealJob = {
   publishedAt: string;
   deadline: string;
   hiringStatus: "open" | "unknown";
-  source: "saramin_api" | "verified_web_search";
+  source: "verified_web_search";
   sourceLabel: string;
   fitScore: number;
   priorityScore: number;
@@ -103,7 +103,6 @@ export default function MatchingPage() {
   };
 
   const sourceLabel = (source: string) => {
-    if (source === "saramin_api") return t("사람인 공식 API", "Saramin official API");
     if (source === "verified_web_search") return t("검증된 웹 검색", "Verified web search");
     if (source === "cache") return t("저장된 검증 결과", "Cached verified result");
     return t("검색 중", "Searching");

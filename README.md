@@ -1,4 +1,4 @@
-# [Path Mate.ai DEMO]
+# [Path Mate.ai]
 
 ## 1. Problem Statement 
 **Target Customers:** Graduating college students, job seekers facing difficulties in the employment market, and high school or early university students planning their future career paths.

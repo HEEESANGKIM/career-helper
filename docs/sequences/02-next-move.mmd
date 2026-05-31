@@ -1,0 +1,59 @@
+%% PathMate.ai - Next Move sequence
+%% Render: https://mermaid.live
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as Next.js Frontend
+    participant Mock as mockNextMoveData
+    participant API as POST personalized-next-move
+    participant Chess as POST evaluate career-chess
+    participant Auth as Supabase Auth
+    participant DB as Supabase DB
+    participant OAI as OpenAI API
+
+    User->>FE: Open /next-move page
+
+    box Current UI flow
+        Note over FE,Mock: Production UI uses local domain seed
+        FE->>Mock: Load CareerTheme YearScenario EventCard
+        Mock-->>FE: Static structures
+        User->>FE: selectTheme and open CareerRunBoard
+        FE->>FE: applyAction and resolveEvent in state
+        FE-->>User: Board UX without API calls
+    end
+
+    box Backend API flow
+        Note over FE,DB: Implemented server routes
+        User->>FE: Trigger personalized board load
+        FE->>Auth: getSession Bearer JWT
+        FE->>API: POST /api/personalized-next-move language
+        API->>Auth: getUserIdFromRequest
+        API->>DB: profiles.select
+        API->>API: fallback moveCandidates recommendedMove
+
+        alt OpenAI configured
+            API->>OAI: responses.create gpt-4.1-mini
+            OAI-->>API: Personalized board JSON
+            API->>API: Merge with fallback
+        else No OpenAI
+            API->>API: profile_fallback only
+        end
+
+        API->>DB: saveEvaluation career-chess
+        API->>DB: career_simulations.insert
+        API-->>FE: moveCandidates dailyMove evaluationId
+        FE-->>User: Show AI roadmap
+    end
+
+    opt User submits deep strategy form
+        User->>FE: Strategy inputs targetRole timeline
+        FE->>Chess: POST /api/evaluate/career-chess
+        Chess->>DB: getUserProfile
+        Chess->>Chess: findCareerTemplate
+        Chess->>OAI: requestEvaluationJson paths and ninetyDayPlan
+        OAI-->>Chess: Strategy analysis JSON
+        Chess->>DB: user_evaluations and career_simulations
+        Chess-->>FE: paths recommendedPath skillGaps
+        FE-->>User: Show strategy paths
+    end

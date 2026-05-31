@@ -16,8 +16,13 @@ function applyTheme(mode: ThemeMode) {
 export default function ThemeToggle() {
   const { language } = useLanguage();
   const [mode, setMode] = useState<ThemeMode>(() => {
+<<<<<<< HEAD
     if (typeof window === "undefined") return "light";
     return window.localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
+=======
+    if (typeof window === "undefined") return "dark";
+    return window.localStorage.getItem(STORAGE_KEY) === "light" ? "light" : "dark";
+>>>>>>> origin/dohyeon
   });
 
   useEffect(() => {

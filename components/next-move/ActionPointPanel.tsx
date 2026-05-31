@@ -30,7 +30,11 @@ export function ActionPointPanel({
           {selectedActionIds.length}/2 AP
         </span>
       </div>
+<<<<<<< HEAD
       <div className="mt-4 grid gap-3">
+=======
+      <div className="mt-4 grid auto-rows-fr gap-3">
+>>>>>>> origin/dohyeon
         {actions.map((action) => {
           const selected = selectedActionIds.includes(action.id);
           return (
@@ -39,20 +43,35 @@ export function ActionPointPanel({
               type="button"
               onClick={() => onToggleAction(action)}
               disabled={disabled}
+<<<<<<< HEAD
               whileHover={disabled ? undefined : { y: -5, scale: 1.01 }}
               whileTap={disabled ? undefined : { scale: 0.985 }}
               className={`rounded-[22px] border p-4 text-left shadow-xl transition disabled:cursor-not-allowed disabled:opacity-70 ${
+=======
+              whileHover={disabled ? undefined : { y: -3 }}
+              whileTap={disabled ? undefined : { scale: 0.985 }}
+              className={`flex min-h-[168px] flex-col rounded-[22px] border p-4 text-left shadow-xl transition disabled:cursor-not-allowed disabled:opacity-70 ${
+>>>>>>> origin/dohyeon
                 selected
                   ? "border-cyan-200/60 bg-[radial-gradient(circle_at_12%_0%,rgba(6,182,212,0.22),transparent_38%),rgba(255,255,255,0.07)] ring-2 ring-cyan-200/15"
                   : "border-white/10 bg-white/[0.035]"
               }`}
             >
+<<<<<<< HEAD
               <div className="flex items-center justify-between gap-3">
                 <p className="text-base font-black text-white">{isKo ? action.titleKo : action.title}</p>
                 <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-black text-white">{action.cost} AP</span>
               </div>
               <p className="mt-2 text-xs leading-5 text-slate-400">{isKo ? action.descriptionKo : action.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
+=======
+              <div className="flex min-h-10 items-start justify-between gap-3">
+                <p className="min-w-0 text-base font-black leading-5 text-white">{isKo ? action.titleKo : action.title}</p>
+                <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-black text-white">{action.cost} AP</span>
+              </div>
+              <p className="mt-2 grow text-xs leading-5 text-slate-400">{isKo ? action.descriptionKo : action.description}</p>
+              <div className="mt-4 flex min-h-8 flex-wrap content-start gap-2">
+>>>>>>> origin/dohyeon
                 {(isKo ? action.consequencesKo : action.consequences).map((item) => (
                   <span key={item} className="rounded-full border border-white/10 bg-black/24 px-2.5 py-1 text-[11px] font-black text-white">
                     {item}

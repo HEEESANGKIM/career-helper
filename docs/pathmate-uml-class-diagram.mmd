@@ -1,0 +1,174 @@
+%% PathMate.ai — System Data Design (UML Class Diagram)
+%% Purpose: what data exists and how features relate (not a code file listing)
+%% Features: Dashboard | Job Matching | Hiring Simulator | Next Move
+%% Next Move: domain model includes API-backed strategy + board-run structure
+%%   (personalized-next-move, career-chess → career_simulations / user_evaluations)
+
+classDiagram
+direction TB
+
+class User {
+    +UUID id
+    +String email
+}
+
+class Profile {
+    +UUID userId
+    +String targetRole
+    +String skills
+    +String experienceSummary
+    +Int projectCount
+    +String careerGoal
+}
+
+class Dashboard {
+    +Int readinessScore
+    +Int marketReadiness
+    +Int interviewReadiness
+    +Int portfolioStrength
+    +Int benchmarkPercentile
+    +List recommendedRoles
+    +List weeklyPlan
+    +evaluateFrom(Profile)
+}
+
+class JobMatching {
+    +List jobPool
+    +Int poolIndex
+    +DateTime lastSearchAt
+    +searchVerifiedJobs(Profile)
+    +pickNextJob()
+}
+
+class LiveJob {
+    +String title
+    +String company
+    +String url
+    +Float fitScore
+    +String hiringStatus
+}
+
+class JobFitReport {
+    +String fitSummary
+    +List strengths
+    +List gaps
+    +List nextActions
+    +compare(Profile, LiveJob)
+}
+
+class HiringSimulator {
+    +String targetRole
+    +String targetCompany
+    +Int resumeMatchScore
+    +Int interviewScore
+    +Int readinessScore
+    +List interviewQuestions
+    +bootstrapFrom(Profile)
+}
+
+class InterviewRound {
+    +String question
+    +String userAnswer
+    +Float clarityScore
+    +Float impactScore
+    +JSON feedback
+    +evaluate()
+}
+
+class NextMove {
+    +JSON currentPosition
+    +MoveOption recommendedMove
+    +List moveCandidates
+    +String endgameGoal
+    +List endgamePlan
+    +String dailyMove
+    +Int xp
+    +String level
+    +personalize(Profile)
+    +buildStrategy(strategyInput)
+    +persistResult()
+}
+
+class MoveOption {
+    +String id
+    +String title
+    +String riskLevel
+    +String rewardLevel
+    +String timeCost
+    +Int confidence
+    +Int expectedImpact
+}
+
+class CareerPath {
+    +String pathId
+    +String title
+    +String riskLevel
+    +String fitLevel
+    +List timeline
+    +List pros
+    +List cons
+    +String nextAction
+}
+
+class CareerRun {
+    +String themeId
+    +JSON playerStats
+    +List yearTimeline
+    +List eventDeck
+    +List availableActions
+    +JSON runSummary
+    +applyAction(action)
+    +resolveEvent(event)
+}
+
+class StrategyInput {
+    +String currentStatus
+    +String targetRole
+    +String timeline
+    +String riskTolerance
+    +String careerPriority
+}
+
+class CareerReferenceData {
+    +List roleTemplates
+    +List syntheticBenchmarks
+    +resolveRole(roleName)
+}
+
+class StoredEvaluation {
+    +UUID id
+    +String featureType
+    +JSON inputSnapshot
+    +JSON outputSnapshot
+    +DateTime createdAt
+}
+
+User "1" --> "1" Profile
+
+Profile "1" --> "1" Dashboard : inputs
+Profile "1" --> "1" JobMatching : inputs
+Profile "1" --> "1" HiringSimulator : inputs
+Profile "1" --> "1" NextMove : inputs
+
+JobMatching "1" *-- "0..10" LiveJob : pool
+JobMatching ..> JobFitReport : produces
+
+HiringSimulator "1" *-- "0..*" InterviewRound : sessions
+
+NextMove "1" *-- "1..*" MoveOption : candidates
+NextMove "1" *-- "1..3" CareerPath : routes
+NextMove "1" *-- "1" CareerRun : active run
+NextMove ..> StrategyInput : uses
+NextMove "1" --> "1" StoredEvaluation : saves
+NextMove ..> MoveOption : recommends
+
+CareerRun *-- MoveOption : action choices
+CareerRun o-- CareerPath : long-term alignment
+
+Dashboard ..> CareerReferenceData
+JobMatching ..> CareerReferenceData
+HiringSimulator ..> CareerReferenceData
+NextMove ..> CareerReferenceData
+
+HiringSimulator <.. NextMove : endgamePlan may use
+Dashboard <.. NextMove : readiness informs moves

@@ -16,12 +16,21 @@ const themeInitScript = `
 (() => {
   try {
     const saved = window.localStorage.getItem("pathmate-theme");
+<<<<<<< HEAD
     const theme = saved === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   } catch {
     document.documentElement.dataset.theme = "light";
     document.documentElement.style.colorScheme = "light";
+=======
+    const theme = saved === "light" ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  } catch {
+    document.documentElement.dataset.theme = "dark";
+    document.documentElement.style.colorScheme = "dark";
+>>>>>>> origin/dohyeon
   }
 })();
 `;
@@ -34,7 +43,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+<<<<<<< HEAD
     <html lang="en" data-theme="light" suppressHydrationWarning>
+=======
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+>>>>>>> origin/dohyeon
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

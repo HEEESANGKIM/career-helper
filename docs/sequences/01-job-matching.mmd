@@ -1,0 +1,75 @@
+%% PathMate.ai - Job Matching sequence
+%% Render: https://mermaid.live
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as Next.js Frontend
+    participant API as GET matching-real-jobs
+    participant Auth as Supabase Auth
+    participant DB as Supabase DB
+    participant OAI as OpenAI API
+    participant Web as Job board sites
+
+    User->>FE: Open /matching page
+    FE->>Auth: getSessionWithRetry()
+    Auth-->>FE: JWT access_token
+
+    FE->>DB: profiles.select by user_id
+    DB-->>FE: Profile row
+
+    FE->>API: GET /api/matching-real-jobs with Bearer JWT
+    API->>Auth: getUserFromToken()
+    Auth-->>API: user id
+
+    API->>DB: read real_job_search_cache
+    API->>DB: read profiles and cover_letters
+
+    alt Cache hit within 6 hours
+        API->>API: normalizeCachedResponse and buildPoolPayload
+        API-->>FE: 200 cached pool and fitScore
+    else Cache miss or refresh flag
+        API->>API: getRecommendedRoles
+
+        loop Up to 3 search passes
+            API->>OAI: responses.create gpt-4o-mini with web_search_preview
+            OAI-->>API: Candidate job JSON list
+            API->>API: normalizeWebItem and scoreJob
+
+            loop Each candidate URL
+                API->>Web: verifyLiveJobPosting HTTP check
+                Web-->>API: Page reachable
+            end
+
+            API->>API: mergeJobPools and sort by priorityScore
+        end
+
+        alt No verified jobs found
+            API-->>FE: 404 error
+        else Jobs found
+            API->>API: buildMarketInsights
+            opt User requested refresh
+                API->>DB: delete old cache row
+            end
+            API->>DB: upsert real_job_search_cache JSONB
+            API-->>FE: 200 pool poolIndex poolSize
+        end
+    end
+
+    FE->>FE: applyJobPoolResponse and render one job
+
+    opt User runs posting analysis
+        User->>FE: Select job card
+        FE->>API: POST /api/job-detail-analysis
+        Note right of API: No Bearer check in route today
+        API->>OAI: responses.create gpt-4o-mini
+        OAI-->>API: fitSummary strengths gaps actionItems
+        API-->>FE: Job fit report JSON
+        FE-->>User: Show analysis panel
+    end
+
+    alt User shows next job in pool
+        FE->>FE: Increment poolIndex locally
+    else Pool exhausted
+        FE->>API: GET with refresh=1 and exclude URLs
+    end

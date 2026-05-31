@@ -1,0 +1,45 @@
+%% PathMate.ai - Cover Letter Generation sequence
+%% Render: https://mermaid.live
+
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as Next.js Frontend
+    participant API as cover-letter API
+    participant Auth as Supabase Auth
+    participant DB as Supabase DB
+    participant OAI as OpenAI API
+
+    User->>FE: Open /cover-letter page
+    FE->>Auth: getSessionWithRetry()
+    Auth-->>FE: JWT access_token
+
+    FE->>API: GET /api/cover-letter with Bearer
+    API->>Auth: getUserFromToken()
+    API->>DB: cover_letters select limit 20
+    DB-->>API: History rows
+    API-->>FE: items array
+    FE-->>User: Show past letters
+
+    User->>FE: Submit resumeText jobDescription tone
+    FE->>FE: generateCoverLetter handler
+
+    FE->>API: POST /api/cover-letter JSON body
+    API->>Auth: getUserFromToken()
+    API->>DB: profiles.select for context
+
+    API->>API: Build profileContext and tone prompt
+
+    API->>OAI: responses.create gpt-4o-mini
+    OAI-->>API: generated_text draft
+
+    API->>DB: cover_letters.insert
+
+    alt Insert succeeded
+        API-->>FE: id createdAt generatedText
+        FE->>FE: Update UI and reload history
+        FE-->>User: Display new cover letter
+    else Insert failed
+        API-->>FE: 500 error
+        FE-->>User: Show error message
+    end

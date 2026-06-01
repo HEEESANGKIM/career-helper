@@ -1,11 +1,7 @@
 ﻿"use client";
 
 import type { CSSProperties } from "react";
-<<<<<<< HEAD
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-=======
-import { useCallback, useEffect, useMemo, useState } from "react";
->>>>>>> origin/dohyeon
 import Link from "next/link";
 import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -30,11 +26,7 @@ type CompetitionLevel = "low" | "moderate" | "high" | "unknown";
 type EvidenceSource = {
   label: string;
   url: string;
-<<<<<<< HEAD
   sourceType: "official_api" | "job_posting" | "search_result";
-=======
-  sourceType: "job_posting" | "search_result";
->>>>>>> origin/dohyeon
   verifiedAt: string;
 };
 
@@ -102,10 +94,7 @@ export default function MatchingPage() {
   const [detailAnalysis, setDetailAnalysis] = useState<JobDetailAnalysis | null>(null);
   const [detailJob, setDetailJob] = useState<RealJob | null>(null);
   const [applicationStatuses, setApplicationStatuses] = useState<Record<string, string>>({});
-<<<<<<< HEAD
   const jobsFetchInFlightRef = useRef(false);
-=======
->>>>>>> origin/dohyeon
 
   const formatNumber = (value: number | null | undefined) => {
     if (typeof value !== "number") return t("미공개", "Not public");
@@ -155,7 +144,6 @@ export default function MatchingPage() {
       summary: t("일반적인 회사 유형 패턴과 공고 내용에 기반한 추정 적합도입니다. 사실로 단정하지 말고 면접에서 확인하세요.", "Estimated fit based on common company patterns and the posting text. Treat it as a prompt to verify in interviews, not a fact."),
     };
   }, [detailJob, t]);
-<<<<<<< HEAD
 
   const applyJobPoolResponse = useCallback((json: Record<string, unknown>) => {
     const pool = (Array.isArray(json.pool) ? json.pool : json.items) as RealJob[];
@@ -264,8 +252,6 @@ export default function MatchingPage() {
       excludeUrls: jobPool.map((job) => job.url).filter(Boolean),
     });
   }, [fetchRealJobs, jobPool, poolIndex]);
-=======
->>>>>>> origin/dohyeon
 
   useEffect(() => {
     const load = async () => {
@@ -305,41 +291,12 @@ export default function MatchingPage() {
 
       setLoading(false);
 
-<<<<<<< HEAD
       if (!session.access_token) return;
       await fetchRealJobs({ accessToken: session.access_token });
     };
 
     void load();
   }, [language, fetchRealJobs]);
-=======
-      const token = session.access_token;
-      if (!token) return;
-
-      setRealJobsLoading(true);
-      const res = await fetch("/api/matching-real-jobs", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const json = await res.json();
-      setRealJobsLoading(false);
-
-      if (!res.ok) {
-        setRealJobsMessage(json.error ?? t("실공고 검색에 실패했습니다.", "Failed to fetch live job postings."));
-        return;
-      }
-
-      setRealJobs(json.items ?? []);
-      setRecommendedRoles(json.recommendedRoles ?? []);
-      setRealJobsSource(json.source ?? "");
-      setMarketInsights(json.marketInsights ?? null);
-      setRealJobsMessage("");
-    };
-
-    void load();
-  }, [t]);
->>>>>>> origin/dohyeon
 
   const loadJobDetailAnalysis = async (job: RealJob, idx: number) => {
     if (!profile) return;
@@ -462,7 +419,6 @@ export default function MatchingPage() {
                 </div>
               </div>
 
-<<<<<<< HEAD
               <div className="mt-6 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <SectionTitle title={t("현재 모집중 실공고 추천", "Live Job Recommendations")} description={sourceLabel(realJobsSource)} />
                 {jobPool.length > 0 && (
@@ -484,42 +440,6 @@ export default function MatchingPage() {
                     ? t("다른 업무를 새로 찾는 중입니다. 10~15초 정도 걸릴 수 있습니다.", "Searching for other roles. This may take 10–15 seconds.")
                     : t("실제 공고를 찾는 중입니다...", "Searching live postings...")}
                 </Notice>
-=======
-              <div className="mt-6">
-                <SectionTitle title={t("현재 모집중 실공고 추천", "Live Job Recommendations")} description={sourceLabel(realJobsSource)} />
-              </div>
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                {sourceLabel(realJobsSource)}
-              </p>
-
-              {realJobsLoading && <Notice className="mt-2">{t("실제 공고를 찾는 중입니다...", "Searching live postings...")}</Notice>}
-              {!realJobsLoading && realJobsMessage && (
-                <Notice className="mt-2" tone="warning">{realJobsMessage}</Notice>
-              )}
-              {!realJobsLoading && !realJobsMessage && marketInsights && (
-                <div className="content-card mt-3 p-4">
-                  <div className="responsive-card-grid text-sm">
-                    <div className="content-card p-3 text-[var(--muted-strong)]">
-                      <p className="text-xs font-medium text-[var(--muted)]">{t("평균 지원자수/공고", "Avg. applicants/posting")}</p>
-                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{formatNumber(marketInsights.averageApplicantsPerPosting)}</p>
-                    </div>
-                    <div className="content-card p-3 text-[var(--muted-strong)]">
-                      <p className="text-xs font-medium text-[var(--muted)]">{t("평균 조회수/공고", "Avg. views/posting")}</p>
-                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{formatNumber(marketInsights.averageViewsPerPosting)}</p>
-                    </div>
-                    <div className="content-card p-3 text-[var(--muted-strong)]">
-                      <p className="text-xs font-medium text-[var(--muted)]">{t("경쟁 강도", "Competition level")}</p>
-                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{competitionLabel(marketInsights.competitionLevel)}</p>
-                    </div>
-                  </div>
-                  <p className="ko-friendly mt-3 text-xs leading-5 text-[var(--muted)]">{marketInsights.summary}</p>
-                  <p className="ko-friendly mt-1 text-xs leading-5 text-[var(--muted)]">{marketInsights.caveat}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {t("검증 공고", "Checked postings")}: {marketInsights.postingsChecked}
-                    {marketInsights.postingPoolSize ? ` / ${t("검색 풀", "Search pool")}: ${formatNumber(marketInsights.postingPoolSize)}` : ""}
-                  </p>
-                </div>
->>>>>>> origin/dohyeon
               )}
               {!realJobsLoading && !realJobsRefreshing && realJobsMessage && (
                 <Notice className="mt-2" tone="warning">{realJobsMessage}</Notice>
@@ -580,7 +500,6 @@ export default function MatchingPage() {
                             {t("출처", "Source")}: {job.sourceLabel}
                           </p>
                           <p className="ko-friendly mt-3 text-sm leading-6 text-[var(--muted-strong)]">{job.summary}</p>
-<<<<<<< HEAD
                         </div>
                         <div className="flex flex-col items-stretch gap-2 sm:items-end">
                           <button
@@ -599,12 +518,6 @@ export default function MatchingPage() {
                             {t("공고 보기", "View posting")}
                           </a>
                         </div>
-=======
-                        </div>
-                        <a href={job.url} target="_blank" rel="noreferrer" className="secondary-btn px-2 py-1 text-xs">
-                          {t("공고 보기", "View posting")}
-                        </a>
->>>>>>> origin/dohyeon
                       </div>
                       <div className="responsive-card-grid mt-4 text-xs">
                         <div className="content-card p-3">

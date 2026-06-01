@@ -130,10 +130,7 @@ body {
 .page-kicker,
 .primary-btn,
 .secondary-btn,
-<<<<<<< HEAD
 .danger-btn,
-=======
->>>>>>> origin/dohyeon
 .chip,
 .accent-pill {
   word-break: keep-all;
@@ -697,12 +694,8 @@ a {
 }
 
 .primary-btn,
-<<<<<<< HEAD
 .secondary-btn,
 .danger-btn {
-=======
-.secondary-btn {
->>>>>>> origin/dohyeon
   display: inline-flex;
   min-height: 40px;
   align-items: center;
@@ -746,7 +739,6 @@ a {
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent),
     0 0 0 1px color-mix(in srgb, var(--accent-2) 48%, var(--line));
-<<<<<<< HEAD
 }
 
 .danger-btn {
@@ -767,8 +759,6 @@ a {
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--danger) 22%, transparent),
     0 0 0 1px color-mix(in srgb, var(--danger) 55%, var(--line));
-=======
->>>>>>> origin/dohyeon
 }
 
 .secondary-btn {
@@ -790,10 +780,7 @@ a {
 
 .primary-btn:disabled,
 .secondary-btn:disabled,
-<<<<<<< HEAD
 .danger-btn:disabled,
-=======
->>>>>>> origin/dohyeon
 .field:disabled {
   cursor: not-allowed;
   opacity: 0.55;

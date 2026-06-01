@@ -86,6 +86,7 @@ export default function SettingsPage() {
   const [accountError, setAccountError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const completion = useMemo(() => {
     const fields: Array<keyof SettingsForm> = [
@@ -125,6 +126,11 @@ export default function SettingsPage() {
     const json = await res.json().catch(() => null);
     if (res.ok) setAlerts(json?.items ?? []);
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setShowWelcome(params.get("welcome") === "1");
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -265,11 +271,14 @@ export default function SettingsPage() {
     }
 
     setMessage(t("설정이 저장되었습니다.", "Settings saved."));
+    setShowWelcome(false);
+    if (window.location.search.includes("welcome=1")) {
+      window.history.replaceState({}, "", "/settings");
+    }
     const session = await getSessionWithRetry();
     if (session?.access_token) await loadAlerts(session.access_token);
   };
 
-<<<<<<< HEAD
   const deleteAccount = async () => {
     const confirmed = window.confirm(
       t(
@@ -308,8 +317,6 @@ export default function SettingsPage() {
     window.location.href = "/login";
   };
 
-=======
->>>>>>> origin/dohyeon
   return (
     <PageShell maxWidth="max-w-7xl">
       <PageHeader
@@ -325,6 +332,15 @@ export default function SettingsPage() {
 
       {loading ? <Notice>{t("설정을 불러오는 중입니다...", "Loading settings...")}</Notice> : null}
 
+      {!loading && showWelcome ? (
+        <Notice className="mb-5" tone="success">
+          {t(
+            "환영합니다! 목표 직무, 스킬, 학력 정보를 먼저 입력하면 매칭·시뮬레이터·대시보드가 훨씬 정확해집니다.",
+            "Welcome! Add your target role, skills, and education first so matching, simulators, and your dashboard work much better.",
+          )}
+        </Notice>
+      ) : null}
+
       {!loading ? (
         <div className="grid gap-5 xl:grid-cols-[0.78fr_1.22fr]">
           <div className="grid content-start gap-5">
@@ -335,7 +351,6 @@ export default function SettingsPage() {
                 <InfoRow label={t("로그인 방식", "Login method")} value={provider} />
                 <InfoRow label={t("가입일", "Joined")} value={joinedAt} />
               </div>
-<<<<<<< HEAD
               <div className="mt-6 border-t border-[var(--line)] pt-5">
                 <p className="text-xs leading-5 text-[var(--muted)]">
                   {t(
@@ -422,73 +437,6 @@ export default function SettingsPage() {
                 <button disabled={saving} className="primary-btn px-4 py-2 text-sm disabled:opacity-60">
                   {saving ? t("저장 중...", "Saving...") : t("설정 저장", "Save Settings")}
                 </button>
-=======
-            </PagePanel>
-
-            <PagePanel>
-              <SectionTitle title={t("프로필 완성도", "Profile Completion")} description={t("대시보드 추천 품질에 직접 반영됩니다.", "Directly improves dashboard recommendations.")} />
-              <p className="mt-5 text-5xl font-semibold text-[var(--foreground)]">{completion}%</p>
-              <div className="signal-bar mt-4">
-                <div className="signal-fill" style={{ width: `${completion}%` }} />
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {skillChips.length ? skillChips.map((skill) => <span key={skill} className="chip">{skill}</span>) : <span className="text-sm text-[var(--muted)]">{t("스킬을 입력하면 여기에 표시됩니다.", "Skills appear here after you add them.")}</span>}
-              </div>
-            </PagePanel>
-
-            <PagePanel>
-              <SectionTitle title={t("최근 공고 알림", "Recent Job Alerts")} description={t("희망 기업을 저장하면 관련 공고를 확인할 수 있습니다.", "Save desired companies to see related alerts.")} />
-              {alerts.length ? (
-                <div className="mt-4 grid gap-2">
-                  {alerts.slice(0, 4).map((alert) => (
-                    <a key={alert.id} href={alert.url} target="_blank" rel="noreferrer" className="content-card clickable-card block p-3 text-sm">
-                      <p className="font-medium text-[var(--foreground)]">{alert.company}</p>
-                      <p className="text-[var(--muted-strong)]">{alert.title}</p>
-                      <p className="text-xs text-[var(--muted)]">{alert.postedAt}</p>
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState>{t("아직 알림이 없습니다.", "No alerts yet.")}</EmptyState>
-              )}
-            </PagePanel>
-          </div>
-
-          <PagePanel>
-            <SectionTitle title={t("개인 정보 및 커리어 프로필", "Personal and Career Profile")} description={t("이제 프로필 편집은 Settings에서만 합니다.", "Profile editing now lives only in Settings.")} />
-            <form className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={saveSettings}>
-              <Field label={t("이름", "Name")} value={form.full_name} onChange={(value) => updateField("full_name", value)} />
-              <Field label={t("학교", "School")} value={form.school_name} onChange={(value) => updateField("school_name", value)} />
-              <Field label={t("학교 유형", "School Type")} value={form.school_type} onChange={(value) => updateField("school_type", value)} placeholder={t("예: 4년제, 대학원", "e.g., 4-year, graduate")} />
-              <Field label={t("학년 / 학력", "Year / Education Level")} value={form.education_level} onChange={(value) => updateField("education_level", value)} placeholder={t("예: 3학년, 석사", "e.g., Junior, Master's")} />
-              <Field label={t("전공", "Major")} value={form.major} onChange={(value) => updateField("major", value)} />
-              <Field label={t("복수전공 / 부전공", "Double Major / Minor")} value={form.sub_major} onChange={(value) => updateField("sub_major", value)} />
-              <Field label={t("졸업 상태", "Graduation Status")} value={form.graduation_status} onChange={(value) => updateField("graduation_status", value)} />
-              <Field label={t("졸업 예정일", "Graduation Date")} type="date" value={form.graduation_date} onChange={(value) => updateField("graduation_date", value)} />
-              <Field label="GPA" type="number" value={form.gpa_score} onChange={(value) => updateField("gpa_score", value)} />
-              <Field label={t("GPA 만점", "GPA Scale")} type="number" value={form.gpa_scale} onChange={(value) => updateField("gpa_scale", value)} />
-              <Field label={t("인턴 경험 수", "Internship Count")} type="number" value={form.internship_count} onChange={(value) => updateField("internship_count", value)} />
-              <Field label={t("프로젝트 수", "Project Count")} type="number" value={form.project_count} onChange={(value) => updateField("project_count", value)} />
-              <Field label={t("희망 직무", "Target Roles")} value={form.target_role} onChange={(value) => updateField("target_role", value)} />
-              <Field label={t("관심 산업", "Career Interests")} value={form.target_industry} onChange={(value) => updateField("target_industry", value)} />
-              <Field label={t("희망 지역", "Preferred Location")} value={form.preferred_location} onChange={(value) => updateField("preferred_location", value)} />
-              <Field label={t("희망 기업", "Desired Companies")} value={form.desired_companies} onChange={(value) => updateField("desired_companies", value)} placeholder={t("쉼표로 구분", "Comma-separated")} />
-              <Field label={t("포트폴리오 링크", "Portfolio Link")} value={form.portfolio_url} onChange={(value) => updateField("portfolio_url", value)} />
-              <Field label="GitHub" value={form.github_url} onChange={(value) => updateField("github_url", value)} />
-              <Textarea label={t("핵심 스킬", "Core Skills")} value={form.core_skills} onChange={(value) => updateField("core_skills", value)} />
-              <Textarea label={t("기술 스택", "Tech Stack")} value={form.tech_stack} onChange={(value) => updateField("tech_stack", value)} />
-              <Textarea label={t("직무 관련 자격증", "Role Certifications")} value={form.role_certifications} onChange={(value) => updateField("role_certifications", value)} />
-              <Textarea label={t("기타 자격증", "Other Certifications")} value={form.other_certifications} onChange={(value) => updateField("other_certifications", value)} />
-              <Field label={t("어학 시험", "Language Test")} value={form.language_test_name} onChange={(value) => updateField("language_test_name", value)} />
-              <Field label={t("어학 점수", "Language Score")} value={form.language_test_score} onChange={(value) => updateField("language_test_score", value)} />
-              <div className="md:col-span-2">
-                <Textarea label={t("경험 요약", "Experience Summary")} value={form.experience_summary} onChange={(value) => updateField("experience_summary", value)} />
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row md:col-span-2">
-                <button disabled={saving} className="primary-btn px-4 py-2 text-sm disabled:opacity-60">
-                  {saving ? t("저장 중...", "Saving...") : t("설정 저장", "Save Settings")}
-                </button>
->>>>>>> origin/dohyeon
                 <Link href="/dashboard" className="secondary-btn px-4 py-2 text-center text-sm">
                   {t("대시보드 보기", "View Dashboard")}
                 </Link>

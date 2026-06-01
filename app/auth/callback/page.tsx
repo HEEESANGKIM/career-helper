@@ -3,16 +3,9 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { resolvePostAuthRedirect, sanitizeNextPath } from "@/lib/post-auth-redirect";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
-
-function sanitizeNextPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/dashboard";
-  }
-
-  return value;
-}
 
 function AuthCallbackContent() {
   const { language } = useLanguage();
@@ -25,6 +18,7 @@ function AuthCallbackContent() {
       : t("Supabase가 설정되지 않았습니다. 환경변수를 확인해 주세요.", "Supabase is not configured. Check your environment variables."),
   );
   const nextPath = useMemo(() => sanitizeNextPath(searchParams.get("next")), [searchParams]);
+  const isOAuthSignup = searchParams.get("signup") === "1";
 
   useEffect(() => {
     if (!supabase || !isSupabaseConfigured) {
@@ -51,7 +45,12 @@ function AuthCallbackContent() {
       if (!mounted) return;
 
       if (session) {
-        window.location.href = nextPath;
+        const destination = await resolvePostAuthRedirect(client, {
+          next: nextPath,
+          isNewSignup: isOAuthSignup,
+          treatRecentSignUpAsOnboarding: true,
+        });
+        window.location.href = destination;
         return;
       }
 
@@ -63,7 +62,7 @@ function AuthCallbackContent() {
     return () => {
       mounted = false;
     };
-  }, [nextPath, searchParams]);
+  }, [isOAuthSignup, nextPath, searchParams]);
 
   return (
     <main className="app-bg grid min-h-screen place-items-center px-4">

@@ -39,13 +39,8 @@ export function EventCardPreview({
           {isKo ? `${year}년차` : `Year ${year}`}
         </span>
       </div>
-<<<<<<< HEAD
       <div className="mt-4 grid gap-3">
         {events.map((event, index) => {
-=======
-      <div className="mt-4 grid grid-cols-1 gap-3">
-        {events.map((event) => {
->>>>>>> origin/dohyeon
           const selected = selectedEventId === event.id;
           return (
             <motion.button
@@ -53,7 +48,6 @@ export function EventCardPreview({
               type="button"
               onClick={() => onSelectEvent(event)}
               disabled={disabled}
-<<<<<<< HEAD
               initial={{ opacity: 0, y: 16, rotate: index % 2 === 0 ? -1.2 : 1.2 }}
               animate={{ opacity: 1, y: 0, rotate: selected ? 0 : index % 2 === 0 ? -0.6 : 0.6 }}
               whileHover={disabled ? undefined : { y: -6, scale: 1.015 }}
@@ -66,20 +60,6 @@ export function EventCardPreview({
               </div>
               <p className="mt-2 text-xs leading-5 text-slate-400">{isKo ? event.descriptionKo : event.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-=======
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              whileTap={disabled ? undefined : { scale: 0.995 }}
-              className={`relative grid h-[178px] w-full grid-rows-[40px_1fr_40px] overflow-hidden rounded-[22px] border-2 bg-[linear-gradient(145deg,rgba(255,255,255,0.11),rgba(255,255,255,0.025)_48%,rgba(0,0,0,0.22))] p-4 text-left shadow-xl transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-70 ${rarityClass[event.rarity]} ${selected ? "ring-2 ring-white/18" : ""}`}
-            >
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/50" />
-              <div className="flex items-start justify-between gap-3">
-                <p className="min-w-0 overflow-hidden text-base font-black leading-5 text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{isKo ? event.titleKo : event.title}</p>
-                <span className="shrink-0 rounded-full border border-current/30 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em]">{event.rarity}</span>
-              </div>
-              <p className="mt-2 overflow-hidden text-xs leading-5 text-slate-400 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">{isKo ? event.descriptionKo : event.description}</p>
-              <div className="mt-3 flex flex-wrap content-start gap-2 overflow-hidden">
->>>>>>> origin/dohyeon
                 {(isKo ? event.statChangesKo : event.statChanges).map((change) => (
                   <span key={change} className="rounded-full border border-white/12 bg-black/24 px-2.5 py-1 text-[11px] font-black text-white">
                     {change}

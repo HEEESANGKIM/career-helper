@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { SETTINGS_ONBOARDING_PATH } from "@/lib/post-auth-redirect";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
 
@@ -40,9 +41,14 @@ export default function RegisterPage() {
     }
 
     if (data.session) {
-      setMessage(t("가입과 동시에 로그인되었습니다. 잠시 후 대시보드로 이동합니다.", "Signed up and logged in. Redirecting to dashboard."));
+      setMessage(
+        t(
+          "가입이 완료되었습니다. 프로필 설정 화면으로 이동합니다.",
+          "Sign-up complete. Redirecting you to set up your profile.",
+        ),
+      );
       setTimeout(() => {
-        window.location.href = "/dashboard";
+        window.location.href = SETTINGS_ONBOARDING_PATH;
       }, 900);
       return;
     }
@@ -66,7 +72,7 @@ export default function RegisterPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?signup=1`,
         queryParams: {
           prompt: "select_account",
         },

@@ -36,6 +36,7 @@
   --field-bg: rgba(13, 18, 31, 0.78);
   --field-bg-focus: rgba(18, 25, 42, 0.94);
   --field-highlight: rgba(255, 255, 255, 0.05);
+  --placeholder: #5f6f86;
   --secondary-hover-bg: rgba(124, 156, 255, 0.12);
   --secondary-hover-color: #f8fbff;
   --accent-strong: var(--accent-2);
@@ -43,6 +44,8 @@
   --accent-warm: var(--warning);
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
   --shadow-soft: 0 18px 54px rgba(0, 0, 0, 0.28);
+  --rail-surface-top: #313d66;
+  --rail-surface-bottom: #283454;
   --font-geist-sans: "Inter", "Pretendard", "Noto Sans KR", "Segoe UI", Arial, Helvetica, sans-serif;
   --font-geist-mono: "Consolas", "Courier New", monospace;
 }
@@ -81,6 +84,7 @@
   --field-bg: #ffffff;
   --field-bg-focus: #ffffff;
   --field-highlight: rgba(15, 23, 42, 0.035);
+  --placeholder: #94a3b8;
   --secondary-hover-bg: rgba(124, 58, 237, 0.08);
   --secondary-hover-color: var(--foreground);
   --accent-strong: var(--accent-2);
@@ -88,6 +92,8 @@
   --accent-warm: var(--warning);
   --shadow: 0 24px 80px rgba(31, 41, 55, 0.14);
   --shadow-soft: 0 18px 54px rgba(31, 41, 55, 0.1);
+  --rail-surface-top: #ffffff;
+  --rail-surface-bottom: #f1f5f9;
 }
 
 @theme inline {
@@ -307,10 +313,17 @@ a {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 28px;
-  background: linear-gradient(175deg, var(--surface-strong) 0%, var(--surface) 100%);
+  background:
+    radial-gradient(140% 100% at -5% -10%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 62%),
+    radial-gradient(120% 90% at 105% 105%, color-mix(in srgb, var(--accent-2) 24%, transparent), transparent 66%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 20%),
+    linear-gradient(175deg, var(--rail-surface-top) 0%, var(--rail-surface-bottom) 100%);
   padding: 1.25rem 1rem 1rem;
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(24px) saturate(145%);
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  isolation: isolate;
 }
 
 @media (min-width: 1024px) {
@@ -563,6 +576,11 @@ a {
   background-clip: text;
   color: transparent;
   letter-spacing: -0.015em;
+}
+
+.page-header-shell {
+  contain: paint;
+  transform: translateZ(0);
 }
 
 .page-kicker,
@@ -1050,7 +1068,14 @@ textarea.field {
 }
 
 .field::placeholder {
-  color: color-mix(in srgb, var(--muted) 74%, transparent);
+  color: var(--placeholder);
+  -webkit-text-fill-color: var(--placeholder);
+  opacity: 1;
+}
+
+.field:focus::placeholder {
+  color: var(--placeholder);
+  -webkit-text-fill-color: var(--placeholder);
 }
 
 .field:focus {

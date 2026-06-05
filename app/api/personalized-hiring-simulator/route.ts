@@ -87,12 +87,48 @@ function fallback(profile: ProfileRow | null, coverLetters: CoverLetterRow[], la
   };
 }
 
+type TargetOverrides = {
+  targetRole?: string;
+  targetCompany?: string;
+  experienceLevel?: string;
+  jobDescription?: string;
+};
+
+const limitInterviewQuestions = (questions?: ReturnType<typeof fallback>["interviewQuestions"]) => ({
+  behavioral: (questions?.behavioral ?? []).slice(0, 2),
+  technical: (questions?.technical ?? []).slice(0, 2),
+  companyFit: (questions?.companyFit ?? []).slice(0, 2),
+  followUp: (questions?.followUp ?? []).slice(0, 2),
+});
+
+function applyTargetOverrides<T extends Record<string, unknown>>(result: T, overrides: TargetOverrides): T {
+  const targetRole = cleanText(overrides.targetRole, 120);
+  const targetCompany = cleanText(overrides.targetCompany, 120);
+  const experienceLevel = cleanText(overrides.experienceLevel, 120);
+  const jobDescription = cleanText(overrides.jobDescription, 1600);
+
+  return {
+    ...result,
+    ...(targetRole ? { targetRole } : {}),
+    ...(targetCompany ? { targetCompany } : {}),
+    ...(experienceLevel ? { experienceLevel } : {}),
+    ...(jobDescription ? { jobDescription } : {}),
+  };
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const language = parseLanguage(body?.language);
+  const targetOverrides: TargetOverrides = {
+    targetRole: cleanText(body?.targetRole, 120),
+    targetCompany: cleanText(body?.targetCompany, 120),
+    experienceLevel: cleanText(body?.experienceLevel, 120),
+    jobDescription: cleanText(body?.jobDescription, 1600),
+  };
   const userId = await getUserIdFromRequest(request);
   if (!serviceClient || !userId) {
-    return NextResponse.json(fallback(null, [], language));
+    const guestBase = applyTargetOverrides(fallback(null, [], language), targetOverrides);
+    return NextResponse.json({ ...guestBase, interviewQuestions: limitInterviewQuestions(guestBase.interviewQuestions) });
   }
 
   const { data: profile } = await serviceClient
@@ -108,17 +144,21 @@ export async function POST(request: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(3);
 
-  const base = fallback(profile ?? null, (coverLetters ?? []) as CoverLetterRow[], language);
+  const rawBase = applyTargetOverrides(fallback(profile ?? null, (coverLetters ?? []) as CoverLetterRow[], language), targetOverrides);
+  const base = { ...rawBase, interviewQuestions: limitInterviewQuestions(rawBase.interviewQuestions) };
   if (!openai || !profile) return NextResponse.json(base);
 
   const prompt = [
     "Personalize PathMate.ai Hiring Simulator from the authenticated user's profile.",
     `Return JSON only in ${language === "en" ? "English" : "Korean"}.`,
     "Schema: {targetRole,targetCompany,experienceLevel,jobDescription,resumeMatchScore,interviewScore,readinessScore,missingSkills:string[],strongSignals:string[],weakSignals:string[],interviewQuestions:{behavioral:string[],technical:string[],companyFit:string[],followUp:string[]},answerFeedback:{clarity:number,specificity:number,relevance:number,structure:number,confidence:number},recommendedActions:string[]}",
+    "Return exactly 2 interview questions in each interviewQuestions category: behavioral, technical, companyFit, followUp.",
     "Use conservative estimated practice scores, not real hiring probabilities. Do not invent private facts.",
+    "If userTargetOverrides are provided, prioritize them for targetRole, targetCompany, experienceLevel, and jobDescription.",
     `fallback: ${JSON.stringify(base)}`,
     `profile: ${JSON.stringify(profile)}`,
     `recentDocuments: ${JSON.stringify((coverLetters ?? []).slice(0, 2))}`,
+    `userTargetOverrides: ${JSON.stringify(targetOverrides)}`,
   ].join("\n");
 
   try {
@@ -130,21 +170,27 @@ export async function POST(request: NextRequest) {
     const parsed = parseJsonObject(response.output_text ?? "") as Partial<ReturnType<typeof fallback>> | null;
     if (!parsed) return NextResponse.json(base);
 
-    return NextResponse.json({
-      ...base,
-      ...parsed,
-      resumeMatchScore: clampScore(parsed.resumeMatchScore, base.resumeMatchScore),
-      interviewScore: clampScore(parsed.interviewScore, base.interviewScore),
-      readinessScore: clampScore(parsed.readinessScore, base.readinessScore),
-      answerFeedback: {
-        clarity: clampScore(parsed.answerFeedback?.clarity, base.answerFeedback.clarity),
-        specificity: clampScore(parsed.answerFeedback?.specificity, base.answerFeedback.specificity),
-        relevance: clampScore(parsed.answerFeedback?.relevance, base.answerFeedback.relevance),
-        structure: clampScore(parsed.answerFeedback?.structure, base.answerFeedback.structure),
-        confidence: clampScore(parsed.answerFeedback?.confidence, base.answerFeedback.confidence),
+    const merged = applyTargetOverrides(
+      {
+        ...base,
+        ...parsed,
+        resumeMatchScore: clampScore(parsed.resumeMatchScore, base.resumeMatchScore),
+        interviewScore: clampScore(parsed.interviewScore, base.interviewScore),
+        readinessScore: clampScore(parsed.readinessScore, base.readinessScore),
+        interviewQuestions: limitInterviewQuestions(parsed.interviewQuestions ?? base.interviewQuestions),
+        answerFeedback: {
+          clarity: clampScore(parsed.answerFeedback?.clarity, base.answerFeedback.clarity),
+          specificity: clampScore(parsed.answerFeedback?.specificity, base.answerFeedback.specificity),
+          relevance: clampScore(parsed.answerFeedback?.relevance, base.answerFeedback.relevance),
+          structure: clampScore(parsed.answerFeedback?.structure, base.answerFeedback.structure),
+          confidence: clampScore(parsed.answerFeedback?.confidence, base.answerFeedback.confidence),
+        },
+        source: "openai",
       },
-      source: "openai",
-    });
+      targetOverrides,
+    );
+
+    return NextResponse.json(merged);
   } catch {
     return NextResponse.json(base);
   }

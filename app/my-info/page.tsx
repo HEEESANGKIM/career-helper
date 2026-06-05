@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, memo, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { JobFavoritesPanel } from "@/components/job-favorites-panel";
 import { Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
@@ -73,16 +73,16 @@ export default function SettingsPage() {
   const [email, setEmail] = useState("");
   const [provider, setProvider] = useState("");
   const [joinedAtRaw, setJoinedAtRaw] = useState("");
-  const [form, setForm] = useState<SettingsForm>(initialForm);
-  const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [loadedForm, setLoadedForm] = useState<SettingsForm | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [savedSkills, setSavedSkills] = useState({ core_skills: "", tech_stack: "" });
+  const [savedCompletion, setSavedCompletion] = useState(0);
 
-  const completion = useMemo(() => {
+  const computeCompletion = (snapshot: SettingsForm) => {
     const fields: Array<keyof SettingsForm> = [
       "full_name",
       "school_name",
@@ -95,9 +95,9 @@ export default function SettingsPage() {
       "portfolio_url",
       "experience_summary",
     ];
-    const filled = fields.filter((field) => form[field].trim().length > 0).length;
+    const filled = fields.filter((field) => snapshot[field].trim().length > 0).length;
     return Math.round((filled / fields.length) * 100);
-  }, [form]);
+  };
 
   const skillChips = useMemo(
     () => parseSkillList(savedSkills.core_skills, savedSkills.tech_stack).slice(0, 10),
@@ -117,7 +117,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const load = async () => {
       if (!supabase || !isSupabaseConfigured) {
-        setMessage(t("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.", "Supabase environment variables are not configured. Check .env.local."));
+        setLoadError(t("Supabase 환경변수가 설정되지 않았습니다. .env.local을 확인해 주세요.", "Supabase environment variables are not configured. Check .env.local."));
         setLoading(false);
         return;
       }
@@ -155,9 +155,9 @@ export default function SettingsPage() {
         .maybeSingle();
 
       if (error) {
-        setMessage(error.message);
+        setLoadError(error.message);
       } else if (data) {
-        setForm({
+        const nextForm: SettingsForm = {
           full_name: data.full_name ?? "",
           school_name: data.school_name ?? "",
           school_type: data.school_type ?? "",
@@ -183,11 +183,15 @@ export default function SettingsPage() {
           portfolio_url: data.portfolio_url ?? "",
           github_url: data.github_url ?? "",
           experience_summary: data.experience_summary ?? "",
-        });
+        };
+        setLoadedForm(nextForm);
         setSavedSkills({
-          core_skills: data.core_skills ?? "",
-          tech_stack: data.tech_stack ?? "",
+          core_skills: nextForm.core_skills,
+          tech_stack: nextForm.tech_stack,
         });
+        setSavedCompletion(computeCompletion(nextForm));
+      } else {
+        setLoadedForm(initialForm);
       }
 
       setLoading(false);
@@ -197,13 +201,227 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEn]);
 
-  const updateField = (key: keyof SettingsForm, value: string) => {
+  const handleProfileSaved = useCallback((snapshot: SettingsForm, skills: { core_skills: string; tech_stack: string }) => {
+    setSavedSkills(skills);
+    setSavedCompletion(computeCompletion(snapshot));
+    setShowWelcome(false);
+    if (window.location.search.includes("welcome=1")) {
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, []);
+
+  const headerLabels = useMemo(
+    () => ({
+      title: t("설정", "Settings"),
+      description: t("개인 정보, 목표 직무, 기술, 링크를 한 곳에서 관리합니다.", "Manage personal information, goals, skills, and links in one place."),
+    }),
+    [isEn],
+  );
+
+  const formLabels = useMemo(
+    () => ({
+      panelTitle: t("개인 정보 및 커리어 프로필", "Personal and Career Profile"),
+      panelDesc: t("이제 프로필 편집은 Settings에서만 합니다.", "Profile editing now lives only in Settings."),
+      name: t("이름", "Name"),
+      school: t("학교", "School"),
+      schoolType: t("학교 유형", "School Type"),
+      schoolTypePlaceholder: t("예: 4년제, 대학원", "e.g., 4-year, graduate"),
+      educationLevel: t("학년 / 학력", "Year / Education Level"),
+      educationLevelPlaceholder: t("예: 3학년, 석사", "e.g., Junior, Master's"),
+      major: t("전공", "Major"),
+      subMajor: t("복수전공 / 부전공", "Double Major / Minor"),
+      graduationStatus: t("졸업 상태", "Graduation Status"),
+      graduationDate: t("졸업 예정일", "Graduation Date"),
+      gpaScale: t("GPA 만점", "GPA Scale"),
+      internshipCount: t("인턴 경험 수", "Internship Count"),
+      projectCount: t("프로젝트 수", "Project Count"),
+      targetRole: t("희망 직무", "Target Roles"),
+      targetIndustry: t("관심 산업", "Career Interests"),
+      preferredLocation: t("희망 지역", "Preferred Location"),
+      desiredCompanies: t("희망 기업", "Desired Companies"),
+      desiredCompaniesPlaceholder: t("쉼표로 구분", "Comma-separated"),
+      portfolioUrl: t("포트폴리오 링크", "Portfolio Link"),
+      coreSkills: t("핵심 스킬", "Core Skills"),
+      techStack: t("기술 스택", "Tech Stack"),
+      roleCertifications: t("직무 관련 자격증", "Role Certifications"),
+      otherCertifications: t("기타 자격증", "Other Certifications"),
+      languageTest: t("어학 시험", "Language Test"),
+      languageScore: t("어학 점수", "Language Score"),
+      experienceSummary: t("경험 요약", "Experience Summary"),
+      saving: t("저장 중...", "Saving..."),
+      save: t("설정 저장", "Save Settings"),
+      viewDashboard: t("대시보드 보기", "View Dashboard"),
+      saved: t("설정이 저장되었습니다.", "Settings saved."),
+    }),
+    [isEn],
+  );
+
+  const sidebarLabels = useMemo(
+    () => ({
+      account: t("계정", "Account"),
+      accountDesc: t("로그인 정보는 인증 시스템에서 관리됩니다.", "Login information is managed by the auth system."),
+      email: t("이메일", "Email"),
+      loginMethod: t("로그인 방식", "Login method"),
+      joined: t("가입일", "Joined"),
+      deleteWarning: t(
+        "계정을 삭제하면 프로필, 즐겨찾기 공고, 자소서, 매칭 캐시, 평가·인터뷰·시뮬레이션 기록이 모두 삭제됩니다.",
+        "Deleting your account removes your profile, saved job postings, cover letters, matching cache, and all evaluation, interview, and simulation records.",
+      ),
+      deleting: t("삭제 중...", "Deleting..."),
+      deleteAccount: t("계정 삭제", "Delete account"),
+      completion: t("프로필 완성도", "Profile Completion"),
+      completionDesc: t("대시보드 추천 품질에 직접 반영됩니다.", "Directly improves dashboard recommendations."),
+      completionHint: t("입력 중에는 바뀌지 않고, 저장 후에 갱신됩니다.", "Won't change while typing; updates after you save."),
+      skillsEmpty: t("저장 후 여기에 표시됩니다.", "Skills appear here after you save."),
+    }),
+    [isEn],
+  );
+
+  const deleteAccount = useCallback(async () => {
+    const confirmed = window.confirm(
+      t(
+        "계정과 연결된 모든 데이터(프로필, 자소서, 실공고 캐시, 평가·시뮬레이션 기록 등)가 영구 삭제됩니다. 되돌릴 수 없습니다. 계속하시겠습니까?",
+        "Your account and all related data (profile, cover letters, job cache, evaluations, simulations, etc.) will be permanently deleted. This cannot be undone. Continue?",
+      ),
+    );
+    if (!confirmed) return;
+
+    setAccountError("");
+    setDeletingAccount(true);
+
+    const session = await getSessionWithRetry();
+    const token = session?.access_token;
+    if (!token) {
+      setDeletingAccount(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    const res = await fetch("/api/account/delete", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json().catch(() => null);
+    setDeletingAccount(false);
+
+    if (!res.ok) {
+      setAccountError(json?.error ?? t("계정 삭제에 실패했습니다.", "Failed to delete account."));
+      return;
+    }
+
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    window.location.href = "/login";
+  }, [isEn]);
+
+  return (
+    <PageShell maxWidth="max-w-7xl">
+      <SettingsPageHeader labels={headerLabels} />
+
+      {loading ? <Notice>{t("설정을 불러오는 중입니다...", "Loading settings...")}</Notice> : null}
+      {!loading && loadError ? <Notice tone="warning">{loadError}</Notice> : null}
+
+      {!loading && showWelcome ? (
+        <Notice className="mb-5" tone="success">
+          {t(
+            "환영합니다! 목표 직무, 스킬, 학력 정보를 먼저 입력하면 매칭·시뮬레이터·대시보드가 훨씬 정확해집니다.",
+            "Welcome! Add your target role, skills, and education first so matching, simulators, and your dashboard work much better.",
+          )}
+        </Notice>
+      ) : null}
+
+      {!loading && loadedForm && userId ? (
+        <div className="grid gap-5 xl:grid-cols-[0.78fr_1.22fr]">
+          <SettingsSidebar
+            language={language}
+            email={email}
+            provider={provider}
+            joinedAt={joinedAt}
+            savedCompletion={savedCompletion}
+            skillChips={skillChips}
+            deletingAccount={deletingAccount}
+            accountError={accountError}
+            onDeleteAccount={deleteAccount}
+            labels={sidebarLabels}
+          />
+
+          <SettingsFormPanel userId={userId} initialForm={loadedForm} labels={formLabels} onSaved={handleProfileSaved} />
+        </div>
+      ) : null}
+    </PageShell>
+  );
+}
+
+const SettingsPageHeader = memo(function SettingsPageHeader({
+  labels,
+}: {
+  labels: { title: string; description: string };
+}) {
+  return <PageHeader eyebrow="Settings" title={labels.title} description={labels.description} />;
+});
+
+type SettingsFormLabels = {
+  panelTitle: string;
+  panelDesc: string;
+  name: string;
+  school: string;
+  schoolType: string;
+  schoolTypePlaceholder: string;
+  educationLevel: string;
+  educationLevelPlaceholder: string;
+  major: string;
+  subMajor: string;
+  graduationStatus: string;
+  graduationDate: string;
+  gpaScale: string;
+  internshipCount: string;
+  projectCount: string;
+  targetRole: string;
+  targetIndustry: string;
+  preferredLocation: string;
+  desiredCompanies: string;
+  desiredCompaniesPlaceholder: string;
+  portfolioUrl: string;
+  coreSkills: string;
+  techStack: string;
+  roleCertifications: string;
+  otherCertifications: string;
+  languageTest: string;
+  languageScore: string;
+  experienceSummary: string;
+  saving: string;
+  save: string;
+  viewDashboard: string;
+  saved: string;
+};
+
+const SettingsFormPanel = memo(function SettingsFormPanel({
+  userId,
+  initialForm,
+  labels,
+  onSaved,
+}: {
+  userId: string;
+  initialForm: SettingsForm;
+  labels: SettingsFormLabels;
+  onSaved: (snapshot: SettingsForm, skills: { core_skills: string; tech_stack: string }) => void;
+}) {
+  const [form, setForm] = useState(initialForm);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setForm(initialForm);
+  }, [initialForm]);
+
+  const updateField = useCallback((key: keyof SettingsForm, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  };
+  }, []);
 
   const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!supabase || !isSupabaseConfigured || !userId) return;
+    if (!supabase || !isSupabaseConfigured) return;
 
     const gpaScore = form.gpa_score ? Number(form.gpa_score) : null;
     const gpaScale = form.gpa_scale ? Number(form.gpa_scale) : null;
@@ -257,174 +475,146 @@ export default function SettingsPage() {
       return;
     }
 
-    setSavedSkills({
-      core_skills: trimmedCoreSkills,
-      tech_stack: trimmedTechStack,
-    });
-    setMessage(t("설정이 저장되었습니다.", "Settings saved."));
-    setShowWelcome(false);
-    if (window.location.search.includes("welcome=1")) {
-      window.history.replaceState({}, "", "/settings");
-    }
-  };
-
-  const deleteAccount = async () => {
-    const confirmed = window.confirm(
-      t(
-        "계정과 연결된 모든 데이터(프로필, 자소서, 실공고 캐시, 평가·시뮬레이션 기록 등)가 영구 삭제됩니다. 되돌릴 수 없습니다. 계속하시겠습니까?",
-        "Your account and all related data (profile, cover letters, job cache, evaluations, simulations, etc.) will be permanently deleted. This cannot be undone. Continue?",
-      ),
-    );
-    if (!confirmed) return;
-
-    setAccountError("");
-    setDeletingAccount(true);
-
-    const session = await getSessionWithRetry();
-    const token = session?.access_token;
-    if (!token) {
-      setDeletingAccount(false);
-      window.location.href = "/login";
-      return;
-    }
-
-    const res = await fetch("/api/account/delete", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const json = await res.json().catch(() => null);
-    setDeletingAccount(false);
-
-    if (!res.ok) {
-      setAccountError(json?.error ?? t("계정 삭제에 실패했습니다.", "Failed to delete account."));
-      return;
-    }
-
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
-    window.location.href = "/login";
+    onSaved(form, { core_skills: trimmedCoreSkills, tech_stack: trimmedTechStack });
+    setMessage(labels.saved);
   };
 
   return (
-    <PageShell maxWidth="max-w-7xl">
-      <PageHeader
-        eyebrow="Settings"
-        title={t("설정", "Settings")}
-        description={t("개인 정보, 목표 직무, 기술, 링크를 한 곳에서 관리합니다.", "Manage personal information, goals, skills, and links in one place.")}
-        actions={
-          <Link href="/dashboard" className="secondary-btn px-4 py-2 text-sm">
-            {t("대시보드로 돌아가기", "Back to Dashboard")}
-          </Link>
-        }
-      />
-
-      {loading ? <Notice>{t("설정을 불러오는 중입니다...", "Loading settings...")}</Notice> : null}
-
-      {!loading && showWelcome ? (
-        <Notice className="mb-5" tone="success">
-          {t(
-            "환영합니다! 목표 직무, 스킬, 학력 정보를 먼저 입력하면 매칭·시뮬레이터·대시보드가 훨씬 정확해집니다.",
-            "Welcome! Add your target role, skills, and education first so matching, simulators, and your dashboard work much better.",
-          )}
-        </Notice>
-      ) : null}
-
-      {!loading ? (
-        <div className="grid gap-5 xl:grid-cols-[0.78fr_1.22fr]">
-          <div className="grid content-start gap-5">
-            <PagePanel>
-              <SectionTitle title={t("계정", "Account")} description={t("로그인 정보는 인증 시스템에서 관리됩니다.", "Login information is managed by the auth system.")} />
-              <div className="mt-5 grid gap-3 text-sm text-[var(--muted-strong)]">
-                <InfoRow label={t("이메일", "Email")} value={email || "-"} />
-                <InfoRow label={t("로그인 방식", "Login method")} value={provider} />
-                <InfoRow label={t("가입일", "Joined")} value={joinedAt} />
-              </div>
-              <div className="mt-6 border-t border-[var(--line)] pt-5">
-                <p className="text-xs leading-5 text-[var(--muted)]">
-                  {t(
-                    "계정을 삭제하면 프로필, 즐겨찾기 공고, 자소서, 매칭 캐시, 평가·인터뷰·시뮬레이션 기록이 모두 삭제됩니다.",
-                    "Deleting your account removes your profile, saved job postings, cover letters, matching cache, and all evaluation, interview, and simulation records.",
-                  )}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void deleteAccount()}
-                  disabled={deletingAccount}
-                  className="danger-btn mt-4 w-full px-4 py-2.5 text-sm disabled:opacity-60 sm:w-auto"
-                >
-                  {deletingAccount ? t("삭제 중...", "Deleting...") : t("계정 삭제", "Delete account")}
-                </button>
-                {accountError ? (
-                  <Notice className="mt-3" tone="warning">
-                    {accountError}
-                  </Notice>
-                ) : null}
-              </div>
-            </PagePanel>
-
-            <PagePanel>
-              <SectionTitle title={t("프로필 완성도", "Profile Completion")} description={t("대시보드 추천 품질에 직접 반영됩니다.", "Directly improves dashboard recommendations.")} />
-              <p className="mt-5 text-5xl font-semibold text-[var(--foreground)]">{completion}%</p>
-              <div className="signal-bar mt-4">
-                <div className="signal-fill" style={{ width: `${completion}%` }} />
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {skillChips.length ? skillChips.map((skill) => <span key={skill} className="chip">{skill}</span>) : <span className="text-sm text-[var(--muted)]">{t("저장 후 여기에 표시됩니다.", "Skills appear here after you save.")}</span>}
-              </div>
-            </PagePanel>
-
-            <PagePanel>
-              <JobFavoritesPanel language={language} />
-            </PagePanel>
-          </div>
-
-          <PagePanel>
-            <SectionTitle title={t("개인 정보 및 커리어 프로필", "Personal and Career Profile")} description={t("이제 프로필 편집은 Settings에서만 합니다.", "Profile editing now lives only in Settings.")} />
-            <form className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={saveSettings}>
-              <Field label={t("이름", "Name")} value={form.full_name} onChange={(value) => updateField("full_name", value)} />
-              <Field label={t("학교", "School")} value={form.school_name} onChange={(value) => updateField("school_name", value)} />
-              <Field label={t("학교 유형", "School Type")} value={form.school_type} onChange={(value) => updateField("school_type", value)} placeholder={t("예: 4년제, 대학원", "e.g., 4-year, graduate")} />
-              <Field label={t("학년 / 학력", "Year / Education Level")} value={form.education_level} onChange={(value) => updateField("education_level", value)} placeholder={t("예: 3학년, 석사", "e.g., Junior, Master's")} />
-              <Field label={t("전공", "Major")} value={form.major} onChange={(value) => updateField("major", value)} />
-              <Field label={t("복수전공 / 부전공", "Double Major / Minor")} value={form.sub_major} onChange={(value) => updateField("sub_major", value)} />
-              <Field label={t("졸업 상태", "Graduation Status")} value={form.graduation_status} onChange={(value) => updateField("graduation_status", value)} />
-              <Field label={t("졸업 예정일", "Graduation Date")} type="date" value={form.graduation_date} onChange={(value) => updateField("graduation_date", value)} />
-              <Field label="GPA" type="number" value={form.gpa_score} onChange={(value) => updateField("gpa_score", value)} />
-              <Field label={t("GPA 만점", "GPA Scale")} type="number" value={form.gpa_scale} onChange={(value) => updateField("gpa_scale", value)} />
-              <Field label={t("인턴 경험 수", "Internship Count")} type="number" value={form.internship_count} onChange={(value) => updateField("internship_count", value)} />
-              <Field label={t("프로젝트 수", "Project Count")} type="number" value={form.project_count} onChange={(value) => updateField("project_count", value)} />
-              <Field label={t("희망 직무", "Target Roles")} value={form.target_role} onChange={(value) => updateField("target_role", value)} />
-              <Field label={t("관심 산업", "Career Interests")} value={form.target_industry} onChange={(value) => updateField("target_industry", value)} />
-              <Field label={t("희망 지역", "Preferred Location")} value={form.preferred_location} onChange={(value) => updateField("preferred_location", value)} />
-              <Field label={t("희망 기업", "Desired Companies")} value={form.desired_companies} onChange={(value) => updateField("desired_companies", value)} placeholder={t("쉼표로 구분", "Comma-separated")} />
-              <Field label={t("포트폴리오 링크", "Portfolio Link")} value={form.portfolio_url} onChange={(value) => updateField("portfolio_url", value)} />
-              <Field label="GitHub" value={form.github_url} onChange={(value) => updateField("github_url", value)} />
-              <Textarea label={t("핵심 스킬", "Core Skills")} value={form.core_skills} onChange={(value) => updateField("core_skills", value)} />
-              <Textarea label={t("기술 스택", "Tech Stack")} value={form.tech_stack} onChange={(value) => updateField("tech_stack", value)} />
-              <Textarea label={t("직무 관련 자격증", "Role Certifications")} value={form.role_certifications} onChange={(value) => updateField("role_certifications", value)} />
-              <Textarea label={t("기타 자격증", "Other Certifications")} value={form.other_certifications} onChange={(value) => updateField("other_certifications", value)} />
-              <Field label={t("어학 시험", "Language Test")} value={form.language_test_name} onChange={(value) => updateField("language_test_name", value)} />
-              <Field label={t("어학 점수", "Language Score")} value={form.language_test_score} onChange={(value) => updateField("language_test_score", value)} />
-              <div className="md:col-span-2">
-                <Textarea label={t("경험 요약", "Experience Summary")} value={form.experience_summary} onChange={(value) => updateField("experience_summary", value)} />
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row md:col-span-2">
-                <button disabled={saving} className="primary-btn px-4 py-2 text-sm disabled:opacity-60">
-                  {saving ? t("저장 중...", "Saving...") : t("설정 저장", "Save Settings")}
-                </button>
-                <Link href="/dashboard" className="secondary-btn px-4 py-2 text-center text-sm">
-                  {t("대시보드 보기", "View Dashboard")}
-                </Link>
-              </div>
-            </form>
-            {message ? <Notice className="mt-4">{message}</Notice> : null}
-          </PagePanel>
+    <PagePanel>
+      <SectionTitle title={labels.panelTitle} description={labels.panelDesc} />
+      <form className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={saveSettings} autoComplete="off">
+        <Field fieldKey="full_name" label={labels.name} value={form.full_name} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="school_name" label={labels.school} value={form.school_name} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="school_type" label={labels.schoolType} value={form.school_type} onFieldChange={updateField} placeholder={labels.schoolTypePlaceholder} autoComplete="off" />
+        <Field fieldKey="education_level" label={labels.educationLevel} value={form.education_level} onFieldChange={updateField} placeholder={labels.educationLevelPlaceholder} autoComplete="off" />
+        <Field fieldKey="major" label={labels.major} value={form.major} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="sub_major" label={labels.subMajor} value={form.sub_major} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="graduation_status" label={labels.graduationStatus} value={form.graduation_status} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="graduation_date" label={labels.graduationDate} type="date" value={form.graduation_date} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="gpa_score" label="GPA" type="number" value={form.gpa_score} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="gpa_scale" label={labels.gpaScale} type="number" value={form.gpa_scale} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="internship_count" label={labels.internshipCount} type="number" value={form.internship_count} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="project_count" label={labels.projectCount} type="number" value={form.project_count} onFieldChange={updateField} autoComplete="off" />
+        <Field fieldKey="target_role" label={labels.targetRole} value={form.target_role} onFieldChange={updateField} />
+        <Field fieldKey="target_industry" label={labels.targetIndustry} value={form.target_industry} onFieldChange={updateField} />
+        <Field fieldKey="preferred_location" label={labels.preferredLocation} value={form.preferred_location} onFieldChange={updateField} />
+        <Field fieldKey="desired_companies" label={labels.desiredCompanies} value={form.desired_companies} onFieldChange={updateField} placeholder={labels.desiredCompaniesPlaceholder} />
+        <Field fieldKey="portfolio_url" label={labels.portfolioUrl} value={form.portfolio_url} onFieldChange={updateField} />
+        <Field fieldKey="github_url" label="GitHub" value={form.github_url} onFieldChange={updateField} />
+        <Textarea fieldKey="core_skills" label={labels.coreSkills} value={form.core_skills} onFieldChange={updateField} />
+        <Textarea fieldKey="tech_stack" label={labels.techStack} value={form.tech_stack} onFieldChange={updateField} />
+        <Textarea fieldKey="role_certifications" label={labels.roleCertifications} value={form.role_certifications} onFieldChange={updateField} />
+        <Textarea fieldKey="other_certifications" label={labels.otherCertifications} value={form.other_certifications} onFieldChange={updateField} />
+        <Field fieldKey="language_test_name" label={labels.languageTest} value={form.language_test_name} onFieldChange={updateField} />
+        <Field fieldKey="language_test_score" label={labels.languageScore} value={form.language_test_score} onFieldChange={updateField} />
+        <div className="md:col-span-2">
+          <Textarea fieldKey="experience_summary" label={labels.experienceSummary} value={form.experience_summary} onFieldChange={updateField} />
         </div>
-      ) : null}
-    </PageShell>
+        <div className="flex flex-col gap-2 sm:flex-row md:col-span-2">
+          <button disabled={saving} className="primary-btn px-4 py-2 text-sm disabled:opacity-60">
+            {saving ? labels.saving : labels.save}
+          </button>
+          <Link href="/dashboard" className="secondary-btn px-4 py-2 text-center text-sm">
+            {labels.viewDashboard}
+          </Link>
+        </div>
+      </form>
+      {message ? <Notice className="mt-4">{message}</Notice> : null}
+    </PagePanel>
   );
-}
+});
+
+type SettingsSidebarLabels = {
+  account: string;
+  accountDesc: string;
+  email: string;
+  loginMethod: string;
+  joined: string;
+  deleteWarning: string;
+  deleting: string;
+  deleteAccount: string;
+  completion: string;
+  completionDesc: string;
+  completionHint: string;
+  skillsEmpty: string;
+};
+
+const SettingsSidebar = memo(function SettingsSidebar({
+  language,
+  email,
+  provider,
+  joinedAt,
+  savedCompletion,
+  skillChips,
+  deletingAccount,
+  accountError,
+  onDeleteAccount,
+  labels,
+}: {
+  language: "ko" | "en";
+  email: string;
+  provider: string;
+  joinedAt: string;
+  savedCompletion: number;
+  skillChips: string[];
+  deletingAccount: boolean;
+  accountError: string;
+  onDeleteAccount: () => void;
+  labels: SettingsSidebarLabels;
+}) {
+  return (
+    <div className="grid content-start gap-5">
+      <PagePanel>
+        <SectionTitle title={labels.account} description={labels.accountDesc} />
+        <div className="mt-5 grid gap-3 text-sm text-[var(--muted-strong)]">
+          <InfoRow label={labels.email} value={email || "-"} />
+          <InfoRow label={labels.loginMethod} value={provider} />
+          <InfoRow label={labels.joined} value={joinedAt} />
+        </div>
+        <div className="mt-6 border-t border-[var(--line)] pt-5">
+          <p className="text-xs leading-5 text-[var(--muted)]">{labels.deleteWarning}</p>
+          <button
+            type="button"
+            onClick={() => void onDeleteAccount()}
+            disabled={deletingAccount}
+            className="danger-btn mt-4 w-full px-4 py-2.5 text-sm disabled:opacity-60 sm:w-auto"
+          >
+            {deletingAccount ? labels.deleting : labels.deleteAccount}
+          </button>
+          {accountError ? (
+            <Notice className="mt-3" tone="warning">
+              {accountError}
+            </Notice>
+          ) : null}
+        </div>
+      </PagePanel>
+
+      <PagePanel>
+        <SectionTitle title={labels.completion} description={labels.completionDesc} />
+        <p className="mt-5 text-5xl font-semibold text-[var(--foreground)]">{savedCompletion}%</p>
+        <div className="signal-bar mt-4">
+          <div className="signal-fill" style={{ width: `${savedCompletion}%` }} />
+        </div>
+        <p className="mt-2 text-xs text-[var(--muted)]">{labels.completionHint}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {skillChips.length ? (
+            skillChips.map((skill) => (
+              <span key={skill} className="chip">
+                {skill}
+              </span>
+            ))
+          ) : (
+            <span className="text-sm text-[var(--muted)]">{labels.skillsEmpty}</span>
+          )}
+        </div>
+      </PagePanel>
+
+      <PagePanel>
+        <JobFavoritesPanel language={language} />
+      </PagePanel>
+    </div>
+  );
+});
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -435,32 +625,59 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Field({
+const Field = memo(function Field({
+  fieldKey,
   label,
   value,
-  onChange,
+  onFieldChange,
   placeholder,
   type = "text",
+  autoComplete,
 }: {
+  fieldKey: keyof SettingsForm;
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  onFieldChange: (key: keyof SettingsForm, value: string) => void;
   placeholder?: string;
   type?: string;
+  autoComplete?: string;
 }) {
   return (
     <label className="block">
       <span className="form-label">{label}</span>
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className="field mt-1" />
+      <input
+        type={type}
+        name={`settings-${fieldKey}`}
+        value={value}
+        onChange={(event) => onFieldChange(fieldKey, event.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        className="field mt-1"
+      />
     </label>
   );
-}
+});
 
-function Textarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+const Textarea = memo(function Textarea({
+  fieldKey,
+  label,
+  value,
+  onFieldChange,
+}: {
+  fieldKey: keyof SettingsForm;
+  label: string;
+  value: string;
+  onFieldChange: (key: keyof SettingsForm, value: string) => void;
+}) {
   return (
     <label className="block">
       <span className="form-label">{label}</span>
-      <textarea value={value} onChange={(event) => onChange(event.target.value)} className="field mt-1 min-h-24" />
+      <textarea
+        name={`settings-${fieldKey}`}
+        value={value}
+        onChange={(event) => onFieldChange(fieldKey, event.target.value)}
+        className="field mt-1 min-h-24"
+      />
     </label>
   );
-}
+});

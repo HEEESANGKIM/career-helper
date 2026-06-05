@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ExternalLink, Star, Trash2 } from "lucide-react";
-import { EmptyState, Notice, SectionTitle } from "@/components/ui-shell";
+import { Notice, SectionTitle } from "@/components/ui-shell";
 import { getSessionWithRetry } from "@/lib/supabase";
 
 export type JobFavoriteItem = {
@@ -37,8 +37,8 @@ export function JobFavoritesPanel({ language, compact = false, showManageLink = 
   const [error, setError] = useState("");
   const [page, setPage] = useState(0);
 
-  const loadFavorites = useCallback(async () => {
-    setLoading(true);
+  const loadFavorites = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     setError("");
     const session = await getSessionWithRetry();
     const token = session?.access_token;
@@ -69,7 +69,8 @@ export function JobFavoritesPanel({ language, compact = false, showManageLink = 
 
   useEffect(() => {
     void loadFavorites();
-  }, [loadFavorites]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
 
   const removeFavorite = async (id: string) => {
     const confirmed = window.confirm(t("이 공고를 즐겨찾기에서 삭제할까요?", "Remove this posting from favorites?"));
@@ -133,11 +134,9 @@ export function JobFavoritesPanel({ language, compact = false, showManageLink = 
       {loading ? <Notice className="mt-4">{t("불러오는 중...", "Loading...")}</Notice> : null}
       {!loading && error ? <Notice className="mt-4" tone="warning">{error}</Notice> : null}
       {!loading && !error && visibleItems.length === 0 ? (
-        <div className="mt-4">
-          <EmptyState>
-            {t("아직 등록된 공고가 없습니다.", "No saved postings yet.")}
-          </EmptyState>
-        </div>
+        <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
+          {t("아직 등록된 공고가 없습니다.", "No saved postings yet.")}
+        </p>
       ) : null}
 
       {!loading && !error && visibleItems.length > 0 ? (

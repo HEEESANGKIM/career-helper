@@ -48,7 +48,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <section className="relative mb-6 overflow-hidden rounded-[28px] border border-[var(--line)] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_22%,transparent),var(--surface)_42%,color-mix(in_srgb,var(--accent-2)_12%,transparent))] p-6 shadow-[var(--shadow)] backdrop-blur-2xl sm:p-7 lg:p-8">
+    <section className="page-header-shell relative mb-6 overflow-hidden rounded-[28px] border border-[var(--line)] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_22%,transparent),var(--surface)_42%,color-mix(in_srgb,var(--accent-2)_12%,transparent))] p-6 shadow-[var(--shadow)] backdrop-blur-2xl sm:p-7 lg:p-8">
       <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[color-mix(in_srgb,var(--accent)_26%,transparent)] blur-3xl" />
       <div className="pointer-events-none absolute -bottom-28 left-10 h-56 w-56 rounded-full bg-[color-mix(in_srgb,var(--accent-2)_18%,transparent)] blur-3xl" />
       <div className="relative grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">

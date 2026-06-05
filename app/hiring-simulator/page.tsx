@@ -41,7 +41,7 @@ type FeedbackKey = keyof typeof mockData.answerFeedback;
 type HiringSimulatorData = typeof mockData & {
   experienceLevel?: string;
   jobDescription?: string;
-  source?: "openai" | "profile_fallback";
+  source?: "bedrock" | "openai" | "profile_fallback";
 };
 
 const feedbackLabels: FeedbackKey[] = ["clarity", "specificity", "relevance", "structure", "confidence"];
@@ -144,12 +144,12 @@ export default function HiringSimulatorPage() {
   return (
     <PageShell maxWidth="max-w-7xl">
       <PageHeader eyebrow={t.eyebrow} title={t.title} description={t.description} />
-      {personalizing ? <Notice className="mb-5">{isEn ? "Personalizing from your profile with OpenAI..." : "OpenAI로 내 프로필에 맞게 개인화하는 중..."}</Notice> : null}
+      {personalizing ? <Notice className="mb-5">{isEn ? "Personalizing from your profile with Bedrock..." : "Bedrock으로 내 프로필에 맞게 개인화하는 중..."}</Notice> : null}
       {!personalizing && data.source ? (
-        <Notice className="mb-5" tone={data.source === "openai" ? "success" : "neutral"}>
-          {data.source === "openai"
-            ? isEn ? "Personalized from your profile and recent documents." : "내 프로필과 최근 문서 기반으로 개인화되었습니다."
-            : isEn ? "Personalized with profile fallback because OpenAI is unavailable." : "OpenAI를 사용할 수 없어 프로필 기반 규칙으로 개인화했습니다."}
+        <Notice className="mb-5" tone={data.source === "bedrock" || data.source === "openai" ? "success" : "neutral"}>
+          {data.source === "bedrock" || data.source === "openai"
+            ? isEn ? "Personalized from your profile and Knowledge Base." : "프로필과 Knowledge Base 기반으로 개인화되었습니다."
+            : isEn ? "Personalized with profile fallback because Bedrock is unavailable." : "Bedrock을 사용할 수 없어 프로필 기반 규칙으로 개인화했습니다."}
         </Notice>
       ) : null}
 

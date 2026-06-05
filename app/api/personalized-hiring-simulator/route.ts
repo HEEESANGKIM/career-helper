@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { clampScore, cleanText, getUserIdFromRequest, openai, parseJsonObject } from "@/lib/evaluation-server";
+import { invokeBedrockJson, isBedrockConfigured } from "@/lib/bedrock-client";
+import { clampScore, cleanText, getUserIdFromRequest } from "@/lib/evaluation-server";
 
 export const runtime = "nodejs";
 
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
     .limit(3);
 
   const base = fallback(profile ?? null, (coverLetters ?? []) as CoverLetterRow[], language);
-  if (!openai || !profile) return NextResponse.json(base);
+  if (!isBedrockConfigured() || !profile) return NextResponse.json(base);
 
   const prompt = [
     "Personalize PathMate.ai Hiring Simulator from the authenticated user's profile.",
@@ -129,12 +130,9 @@ export async function POST(request: NextRequest) {
   ].join("\n");
 
   try {
-    const response = await openai.responses.create({
-      model: process.env.OPENAI_EVALUATION_MODEL?.trim() || "gpt-4.1-mini",
-      input: prompt,
-      temperature: 0.2,
-    });
-    const parsed = parseJsonObject(response.output_text ?? "") as Partial<ReturnType<typeof fallback>> | null;
+    const parsed = (await invokeBedrockJson(prompt, { temperature: 0.2, useKnowledgeBase: true })) as Partial<
+      ReturnType<typeof fallback>
+    > | null;
     if (!parsed) return NextResponse.json(base);
 
     return NextResponse.json({
@@ -150,7 +148,7 @@ export async function POST(request: NextRequest) {
         structure: clampScore(parsed.answerFeedback?.structure, base.answerFeedback.structure),
         confidence: clampScore(parsed.answerFeedback?.confidence, base.answerFeedback.confidence),
       },
-      source: "openai",
+      source: "bedrock",
     });
   } catch {
     return NextResponse.json(base);

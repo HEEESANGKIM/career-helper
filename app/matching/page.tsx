@@ -31,7 +31,7 @@ type EvidenceSource = {
 };
 
 type MarketInsights = {
-  source: "verified_web_search" | "cache";
+  source: "knowledge_base" | "verified_web_search" | "cache";
   searchedAt: string;
   postingPoolSize: number | null;
   postingsChecked: number;
@@ -52,7 +52,7 @@ type RealJob = {
   publishedAt: string;
   deadline: string;
   hiringStatus: "open" | "unknown";
-  source: "verified_web_search";
+  source: "knowledge_base" | "verified_web_search";
   sourceLabel: string;
   fitScore: number;
   priorityScore: number;
@@ -109,6 +109,7 @@ export default function MatchingPage() {
   };
 
   const sourceLabel = (source: string) => {
+    if (source === "knowledge_base") return t("Knowledge Base 검색", "Knowledge Base search");
     if (source === "verified_web_search") return t("검증된 웹 검색", "Verified web search");
     if (source === "cache") return t("저장된 검증 결과", "Cached verified result");
     return t("검색 중", "Searching");

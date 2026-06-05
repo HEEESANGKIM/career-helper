@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import { invokeBedrockJson, isBedrockConfigured } from "@/lib/bedrock-client";
 import { languageName, parseLanguage } from "@/lib/evaluation-server";
 
 export const runtime = "nodejs";
-
-const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
 
 const parseJson = (text: string) => {
   try {
@@ -41,12 +38,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!openai) {
+  if (!isBedrockConfigured()) {
     return NextResponse.json(
       {
         error: isEn
-          ? "OpenAI API key is missing; detailed analysis cannot run."
-          : "OpenAI API 키가 없어 상세 분석을 실행할 수 없습니다.",
+          ? "Bedrock is not configured; detailed analysis cannot run."
+          : "Bedrock이 설정되지 않아 상세 분석을 실행할 수 없습니다.",
       },
       { status: 503 },
     );
@@ -96,8 +93,7 @@ export async function POST(request: NextRequest) {
           `지원자 프로필 요약: ${profileSummary}`,
         ].join("\n");
 
-    const response = await openai.responses.create({ model: "gpt-4o-mini", input: prompt });
-    const parsed = parseJson(response.output_text?.trim() ?? "");
+    const parsed = (await invokeBedrockJson(prompt, { useKnowledgeBase: true })) ?? parseJson("");
     if (!parsed || typeof parsed !== "object") {
       return NextResponse.json(
         {

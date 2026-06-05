@@ -1,10 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import { invokeBedrockJson, invokeBedrockText, isBedrockConfigured } from "@/lib/bedrock-client";
 
 export const runtime = "nodejs";
-
-const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
 
 type LanguageMode = "ko" | "en";
 
@@ -239,7 +236,7 @@ const generateVirtualPostings = async (
   targetRole: string,
 ): Promise<{ items: VirtualPosting[]; source: VirtualPosting["source"] }> => {
   const fallback = buildTemplatePostings(language, targetRole).filter((posting) => isOpenDeadline(posting.deadline));
-  if (!openai) {
+  if (!isBedrockConfigured()) {
     return { items: fallback, source: "template_fallback" as const };
   }
 
@@ -283,8 +280,7 @@ const generateVirtualPostings = async (
 }`,
     ].join("\n");
 
-    const response = await openai.responses.create({ model: "gpt-4.1-mini", input: prompt });
-    const parsed = parseJson(response.output_text?.trim() ?? "");
+    const parsed = (await invokeBedrockJson(prompt, { useKnowledgeBase: true })) as { items?: unknown } | null;
     const rawItems = Array.isArray(parsed?.items) ? parsed.items : [];
     const items = rawItems
       .map((item: PostingCandidate, idx: number) => normalizePosting(item, idx, "ai_generated"))
@@ -398,7 +394,7 @@ export async function POST(request: NextRequest) {
     const level = String(body?.level ?? (language === "en" ? "junior" : "주니어"));
     const fallback = buildQuestionFallback(language, role, level);
 
-    if (!openai) return NextResponse.json(fallback);
+    if (!isBedrockConfigured()) return NextResponse.json(fallback);
 
     try {
       const prompt = [
@@ -426,8 +422,7 @@ export async function POST(request: NextRequest) {
 }`,
       ].join("\n");
 
-      const response = await openai.responses.create({ model: "gpt-4.1-mini", input: prompt });
-      const parsed = parseJson(response.output_text?.trim() ?? "");
+      const parsed = (await invokeBedrockJson(prompt, { useKnowledgeBase: true })) as Record<string, unknown> | null;
       if (!parsed) return NextResponse.json(fallback);
 
       return NextResponse.json({
@@ -454,7 +449,7 @@ export async function POST(request: NextRequest) {
     const rubric = Array.isArray(body?.rubric) ? body.rubric.map(String).slice(0, 6) : [];
     const fallback = buildEvaluationFallback(language, answer);
 
-    if (!openai) return NextResponse.json(fallback);
+    if (!isBedrockConfigured()) return NextResponse.json(fallback);
 
     try {
       const prompt = [
@@ -493,11 +488,10 @@ export async function POST(request: NextRequest) {
         `${language === "en" ? "Answer" : "답변"}: ${answer}`,
       ].join("\n");
 
-      const response = await openai.responses.create({ model: "gpt-4.1-mini", input: prompt });
-      const parsed = parseJson(response.output_text?.trim() ?? "");
+      const parsed = (await invokeBedrockJson(prompt, { useKnowledgeBase: true })) as Record<string, unknown> | null;
       if (!parsed) return NextResponse.json(fallback);
 
-      const category = parsed.categoryScores ?? {};
+      const category = (parsed.categoryScores ?? {}) as Record<string, unknown>;
       const hiringSignalRaw = String(parsed.hiringSignal ?? fallback.hiringSignal).toLowerCase();
       const hiringSignal = ["strong_hire", "proceed", "hold", "reject"].includes(hiringSignalRaw)
         ? hiringSignalRaw

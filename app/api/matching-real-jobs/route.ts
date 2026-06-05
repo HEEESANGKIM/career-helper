@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { invokeBedrockJson, invokeBedrockText, isBedrockConfigured, parseJsonFromLlm } from "@/lib/bedrock-client";
 import { languageName, parseLanguageFromRequest, type LanguageMode } from "@/lib/evaluation-server";
 
 export const runtime = "nodejs";
 
 type HiringStatus = "open" | "unknown";
 type CompetitionLevel = "low" | "moderate" | "high" | "unknown";
-type SourceKind = "verified_web_search";
+type SourceKind = "knowledge_base" | "verified_web_search";
 
 type EvidenceSource = {
   label: string;
@@ -17,7 +17,7 @@ type EvidenceSource = {
 };
 
 type MarketInsights = {
-  source: "verified_web_search" | "cache";
+  source: "knowledge_base" | "verified_web_search" | "cache";
   searchedAt: string;
   postingPoolSize: number | null;
   postingsChecked: number;
@@ -102,8 +102,6 @@ const MAX_POOL_SEARCH_PASSES = 3;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-
 const missingCoreConfig = !supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey;
 
 const createAuthedUserClient = (token: string) =>
@@ -116,7 +114,6 @@ const createAuthedUserClient = (token: string) =>
   });
 
 const serviceClient = missingCoreConfig ? null : createClient(supabaseUrl!, supabaseServiceRoleKey!);
-const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
 
 const nowIso = () => new Date().toISOString();
 
@@ -289,7 +286,7 @@ const getRecommendedRoles = async (
   lang: LanguageMode,
 ) => {
   const fallback = fallbackRoles(profile, coverLetters);
-  if (!openai) return fallback;
+  if (!isBedrockConfigured()) return fallback;
 
   const profileText = buildProfileText(profile, coverLetters);
   if (!profileText) return fallback;
@@ -316,12 +313,7 @@ const getRecommendedRoles = async (
             profileText.slice(0, 3000),
           ].join("\n");
 
-    const response = await openai.responses.create({
-      model: "gpt-4o-mini",
-      input: instructions,
-    });
-
-    const parsed = parseAiJson(response.output_text?.trim() ?? "") as { roles?: unknown } | null;
+    const parsed = (await invokeBedrockJson(instructions, { useKnowledgeBase: true })) as { roles?: unknown } | null;
     const roles = Array.isArray(parsed?.roles)
       ? parsed.roles.map((role) => cleanText(role)).filter(Boolean).slice(0, 5)
       : [];
@@ -414,6 +406,68 @@ const verifyLiveJobPosting = async (job: RealJob) => {
   }
 };
 
+const buildWantedSearchUrl = (role: string) =>
+  `https://www.wanted.co.kr/search?query=${encodeURIComponent(cleanText(role))}`;
+
+const buildRoleSearchFallbackJobs = (
+  roles: string[],
+  profile: ProfileRow | null,
+  lang: LanguageMode,
+): RealJob[] => {
+  const L = (ko: string, en: string) => (lang === "en" ? en : ko);
+  const unique = [...new Set(roles.map((role) => cleanText(role)).filter(Boolean))].slice(0, POOL_TARGET_SIZE);
+
+  return unique.map((role) => {
+    const url = buildWantedSearchUrl(role);
+    const baseJob = {
+      title: role,
+      company: L("다양한 기업 (검색)", "Various employers (search)"),
+      location: cleanText(profile?.preferred_location) || unknownLocation(lang),
+      url,
+      summary: L(
+        `Knowledge Base와 프로필을 기준으로 추천한 직무입니다. Wanted에서 "${role}" 관련 공고를 검색하세요.`,
+        `Recommended from your profile and Knowledge Base. Search Wanted for "${role}" postings.`,
+      ),
+      publishedAt: "unknown",
+      deadline: "unknown",
+      hiringStatus: "open" as const,
+      source: "knowledge_base" as const,
+      sourceLabel: L("직무 검색 링크", "Role search link"),
+      applicantCount: null,
+      viewCount: null,
+      competitionLevel: "unknown" as const,
+      competitionText: competitionText(null, null, undefined, lang),
+      evidence: [toEvidence(L("Wanted 검색", "Wanted search"), url, "search_result")],
+    };
+    const scored = scoreJob(baseJob, profile, lang);
+    return { ...baseJob, ...scored };
+  });
+};
+
+const normalizeKbItem = (raw: unknown, profile: ProfileRow | null, lang: LanguageMode): RealJob | null => {
+  const direct = normalizeWebItem(raw, profile, lang);
+  if (direct) return direct;
+
+  if (!raw || typeof raw !== "object") return null;
+  const item = raw as Partial<RealJob>;
+  const title = cleanText(item.title);
+  if (!title) return null;
+
+  const L = (ko: string, en: string) => (lang === "en" ? en : ko);
+  return normalizeWebItem(
+    {
+      ...item,
+      title,
+      company: cleanText(item.company) || L("다양한 기업", "Various employers"),
+      url: cleanText(item.url) || buildWantedSearchUrl(title),
+      hiringStatus: "open",
+      summary: item.summary,
+    },
+    profile,
+    lang,
+  );
+};
+
 const normalizeWebItem = (raw: unknown, profile: ProfileRow | null, lang: LanguageMode): RealJob | null => {
   if (!raw || typeof raw !== "object") return null;
   const job = raw as Partial<RealJob>;
@@ -437,8 +491,8 @@ const normalizeWebItem = (raw: unknown, profile: ProfileRow | null, lang: Langua
     publishedAt: cleanText(job.publishedAt) || "unknown",
     deadline: cleanText(job.deadline) || "unknown",
     hiringStatus: (job.hiringStatus === "open" ? "open" : "unknown") as HiringStatus,
-    source: "verified_web_search" as const,
-    sourceLabel: L("검증된 웹 검색", "Verified web search"),
+    source: "knowledge_base" as const,
+    sourceLabel: L("Knowledge Base 검색", "Knowledge Base search"),
     applicantCount,
     viewCount,
     competitionLevel,
@@ -471,39 +525,37 @@ const parseExcludeUrls = (raw: string | null) =>
     .filter(Boolean)
     .slice(0, 12);
 
-const fetchVerifiedWebJobs = async (
+const fetchKnowledgeBaseJobs = async (
   roles: string[],
   profile: ProfileRow | null,
   coverLetters: CoverLetterRow[],
   lang: LanguageMode,
   excludeUrls: string[] = [],
 ) => {
-  if (!openai) return [] as RealJob[];
+  if (!isBedrockConfigured()) return [] as RealJob[];
 
   const L = (ko: string[], en: string[]) => (lang === "en" ? en.join("\n") : ko.join("\n"));
 
   const prompt = L(
     [
       `오늘 날짜는 ${new Date().toISOString().slice(0, 10)}이다.`,
-      "한국 채용 플랫폼에서 현재 모집중인 실제 채용공고만 웹 검색한다.",
-      "절대 공고를 새로 만들지 않는다. 검색 결과나 공고 원문에서 확인되지 않는 값은 null 또는 unknown으로 둔다.",
-      "지원자수(applicantCount), 조회수(viewCount)는 공고 원문/검색 결과에서 숫자가 보일 때만 입력하고 추정하지 않는다.",
-      "마감/종료/closed/expired 공고는 제외한다.",
-      "허용 도메인: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
-      `지원자 프로필에 맞는 서로 다른 채용공고를 최소 ${POOL_TARGET_SIZE}개 찾는다(회사·직무·URL이 모두 달라야 함).`,
+      "Bedrock Knowledge Base(S3 cse416-bedrock/RAG/)에 인덱싱된 채용·커리어 문서만 근거로 사용한다.",
+      "문서에 없는 공고·URL·회사·숫자는 만들지 않는다. 확인되지 않은 값은 null 또는 unknown.",
+      "지원자수·조회수는 문서에 명시된 경우에만 입력한다.",
+      "허용 URL 도메인: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
+      `프로필에 맞는 서로 다른 채용공고를 최대 ${POOL_TARGET_SIZE}개 JSON으로 반환(회사·직무·URL 중복 금지).`,
       "JSON 객체만 출력한다.",
-      `summary 필드의 문장은 반드시 ${languageName(lang)}로 작성한다.`,
+      `summary는 ${languageName(lang)}로 작성한다.`,
     ],
     [
       `Today's date is ${new Date().toISOString().slice(0, 10)}.`,
-      "Use web search to find only real, currently open job postings on major South Korean job platforms.",
-      "Never fabricate postings. Use null or unknown for any field not confirmed in search results or posting text.",
-      "Fill applicantCount and viewCount only when explicit numbers appear; do not estimate.",
-      "Exclude closed, expired, or 마감 postings.",
-      "Allowed domains: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
-      `Find at least ${POOL_TARGET_SIZE} different open postings that fit the applicant (distinct company, role, and URL).`,
+      "Use only documents indexed in the Bedrock Knowledge Base (S3 cse416-bedrock/RAG/).",
+      "Never fabricate postings, URLs, companies, or numbers not present in retrieved context.",
+      "Fill applicantCount and viewCount only when explicit in source documents.",
+      "Allowed URL domains: jobkorea.co.kr, wanted.co.kr, incruit.com, catch.co.kr, rocketpunch.com, peoplenjob.com",
+      `Return up to ${POOL_TARGET_SIZE} distinct job postings as JSON (unique company, role, and URL).`,
       "Output a JSON object only.",
-      `Write every human-readable string in the JSON (especially summary) in ${languageName(lang)}.`,
+      `Write summary in ${languageName(lang)}.`,
     ],
   );
 
@@ -549,41 +601,34 @@ const fetchVerifiedWebJobs = async (
   ].join("\n");
 
   try {
-    const aiResponse = await openai.responses.create({
-      model: "gpt-4o-mini",
-      tools: [{ type: "web_search_preview" }],
-      input: `${prompt}\n${tail}`,
-    });
+    let parsed = (await invokeBedrockJson(`${prompt}\n${tail}`, { useKnowledgeBase: true })) as {
+      items?: unknown;
+    } | null;
 
-    const parsed = parseAiJson(aiResponse.output_text?.trim() ?? "") as { items?: unknown } | null;
+    if (!parsed?.items) {
+      const text = await invokeBedrockText(`${prompt}\n${tail}`, { useKnowledgeBase: true });
+      parsed = parseJsonFromLlm(text) as { items?: unknown } | null;
+    }
+
     const candidates = Array.isArray(parsed?.items) ? parsed.items : [];
     const normalized = candidates
-      .map((item) => normalizeWebItem(item, profile, lang))
+      .map((item) => normalizeKbItem(item, profile, lang))
       .filter((item): item is RealJob => Boolean(item))
-      .filter(
-        (item) =>
-          (item.hiringStatus === "open" || item.hiringStatus === "unknown") && isRecentPosting(item.publishedAt),
-      )
+      .filter((item) => item.hiringStatus === "open" || item.hiringStatus === "unknown")
       .slice(0, MAX_CANDIDATES);
 
-    const verified = await Promise.all(
-      normalized.map(async (item) => {
-        const ok = await verifyLiveJobPosting(item);
-        return ok ? item : null;
-      }),
-    );
-
     const seenUrls = new Set<string>();
-    return verified
+    return normalized
       .filter((item): item is RealJob => {
-        if (!item || seenUrls.has(item.url)) return false;
+        if (seenUrls.has(item.url)) return false;
         seenUrls.add(item.url);
         if (excludeUrls.includes(item.url)) return false;
         return true;
       })
       .sort((a, b) => b.priorityScore - a.priorityScore)
       .slice(0, POOL_TARGET_SIZE);
-  } catch {
+  } catch (error) {
+    console.error("[matching-real-jobs] Knowledge Base fetch failed:", error);
     return [];
   }
 };
@@ -615,7 +660,7 @@ const buildVerifiedJobPool = async (
     const searchRoles = roleSeeds.slice(offset, offset + 5);
     if (searchRoles.length === 0) break;
 
-    const batch = await fetchVerifiedWebJobs(searchRoles, profile, coverLetters, lang, [
+    const batch = await fetchKnowledgeBaseJobs(searchRoles, profile, coverLetters, lang, [
       ...excluded,
       ...pool.map((job) => job.url),
     ]);
@@ -641,11 +686,11 @@ const buildMarketInsights = (
   const sourceName =
     lang === "en"
       ? source === "cache"
-          ? "Cached verified results"
-          : "Verified web search"
+          ? "Cached Knowledge Base results"
+          : "Knowledge Base search"
       : source === "cache"
-          ? "저장된 검증 결과"
-          : "검증된 웹 검색";
+          ? "저장된 Knowledge Base 결과"
+          : "Knowledge Base 검색";
 
   const locale = lang === "en" ? "en-US" : "ko-KR";
 
@@ -693,10 +738,10 @@ const normalizeCachedItem = (raw: unknown, lang: LanguageMode): RealJob | null =
       publishedAt: cleanText(item.publishedAt) || "unknown",
       deadline: cleanText(item.deadline) || "unknown",
       hiringStatus: item.hiringStatus === "open" ? "open" : "unknown",
-      source: "verified_web_search",
+      source: "knowledge_base",
       sourceLabel:
         cleanText(item.sourceLabel) ||
-        L("검증된 웹 검색", "Verified web search"),
+        L("Knowledge Base 검색", "Knowledge Base search"),
       fitScore: clamp(readNumber(item.fitScore) ?? 50, 0, 100),
       priorityScore: clamp(readNumber(item.priorityScore) ?? readNumber(item.fitScore) ?? 50, 0, 100),
       applicantCount: readNumber(item.applicantCount),
@@ -780,7 +825,7 @@ const relocalizeCachedJob = (item: RealJob, profile: ProfileRow | null, lang: La
       item.location === UNKNOWN_LOCATION_KO || item.location === UNKNOWN_LOCATION_EN
         ? unknownLocation(lang)
         : item.location,
-    sourceLabel: L("검증된 웹 검색", "Verified web search"),
+    sourceLabel: L("Knowledge Base 검색", "Knowledge Base search"),
     evidence: (item.evidence ?? []).map((e) => ({
       ...e,
       label:
@@ -878,9 +923,19 @@ export async function GET(request: NextRequest) {
 
   const recommendedRoles = await getRecommendedRoles(typedProfile, typedCoverLetters, language);
 
-  let source: MarketInsights["source"] = "verified_web_search";
+  let source: MarketInsights["source"] = "knowledge_base";
   let postingPoolSize: number | null = null;
-  const pool = await buildVerifiedJobPool(recommendedRoles, typedProfile, typedCoverLetters, language, excludeUrls);
+  let pool = await buildVerifiedJobPool(recommendedRoles, typedProfile, typedCoverLetters, language, excludeUrls);
+  let usedRoleSearchFallback = false;
+
+  if (pool.length === 0) {
+    const fallbackRoleList =
+      recommendedRoles.length > 0
+        ? recommendedRoles
+        : fallbackRoles(typedProfile, typedCoverLetters);
+    pool = buildRoleSearchFallbackJobs(fallbackRoleList, typedProfile, language);
+    usedRoleSearchFallback = pool.length > 0;
+  }
 
   if (pool.length === 0) {
     const refreshHint =
@@ -930,17 +985,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: saveError.message }, { status: 500 });
   }
 
-  const poolNote =
-    pool.length < POOL_TARGET_SIZE
+  const poolNote = usedRoleSearchFallback
+    ? language === "en"
+      ? "Knowledge Base has career guides but no indexed job posting URLs. Showing Wanted search links for recommended roles from your profile."
+      : "Knowledge Base에 채용 가이드는 있으나 공고 URL이 없어, 프로필 기준 추천 직무의 Wanted 검색 링크를 표시합니다."
+    : pool.length < POOL_TARGET_SIZE
       ? language === "en"
-        ? `Verified ${pool.length} live posting(s) for your profile (target up to ${POOL_TARGET_SIZE}). This is not an account limit — try filling target role/skills or run “Search new picks” again.`
-        : `프로필 기준 검증된 실공고 ${pool.length}건입니다(목표 최대 ${POOL_TARGET_SIZE}건). 계정 제한이 아니라 검색·검증 결과이니, 희망직무·스킬을 보강하거나 ‘새 목록 검색’을 다시 시도해 보세요.`
+        ? `Found ${pool.length} match(es) for your profile (target up to ${POOL_TARGET_SIZE}). Add target role/skills in Settings or run “Search new picks” again.`
+        : `프로필 기준 ${pool.length}건을 찾았습니다(목표 최대 ${POOL_TARGET_SIZE}건). Settings에서 희망직무·스킬을 보강하거나 ‘새 목록 검색’을 다시 시도해 보세요.`
       : undefined;
 
   return NextResponse.json({
     source,
     searchedAt: marketInsights.searchedAt,
     poolNote,
+    usedRoleSearchFallback,
     ...results,
   });
 }

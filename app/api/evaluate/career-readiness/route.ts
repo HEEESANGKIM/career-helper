@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { calculateSkillMatch, careerDataCopy, findCareerTemplate, localizeTemplate, type LanguageMode } from "@/lib/career-data";
-import { clampScore, cleanText, openai, parseJsonObject } from "@/lib/evaluation-server";
+import { invokeBedrockJson, isBedrockConfigured } from "@/lib/bedrock-client";
+import { clampScore, cleanText } from "@/lib/evaluation-server";
 
 export const runtime = "nodejs";
 
@@ -121,21 +122,17 @@ export async function POST(request: NextRequest) {
   };
 
   let explanation = fallbackExplanation;
-  if (openai) {
+  if (isBedrockConfigured()) {
     try {
-      const response = await openai.responses.create({
-        model: process.env.OPENAI_EVALUATION_MODEL?.trim() || "gpt-4.1-mini",
-        input: [
-          "Generate a concise career readiness explanation for PathMate.ai.",
-          `Return JSON only in ${language === "en" ? "English" : "Korean"}: {"strengths":[],"gaps":[],"recommendedNextAction":""}`,
-          `targetRole: ${localized.role}`,
-          `components: ${JSON.stringify(components)}`,
-          `requiredSkills: ${localized.requiredSkills.join(", ")}`,
-          `recommendedProjects: ${localized.recommendedProjects.join(", ")}`,
-        ].join("\n"),
-        temperature: 0.2,
-      });
-      const parsed = parseJsonObject(response.output_text ?? "") as typeof fallbackExplanation | null;
+      const prompt = [
+        "Generate a concise career readiness explanation for PathMate.ai.",
+        `Return JSON only in ${language === "en" ? "English" : "Korean"}: {"strengths":[],"gaps":[],"recommendedNextAction":""}`,
+        `targetRole: ${localized.role}`,
+        `components: ${JSON.stringify(components)}`,
+        `requiredSkills: ${localized.requiredSkills.join(", ")}`,
+        `recommendedProjects: ${localized.recommendedProjects.join(", ")}`,
+      ].join("\n");
+      const parsed = (await invokeBedrockJson(prompt, { temperature: 0.2, useKnowledgeBase: true })) as typeof fallbackExplanation | null;
       if (parsed?.recommendedNextAction) explanation = parsed;
     } catch {
       explanation = fallbackExplanation;

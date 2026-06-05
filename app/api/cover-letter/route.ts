@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { getBedrockModelId, invokeBedrockText, isBedrockConfigured } from "@/lib/bedrock-client";
 import { languageName, parseLanguage } from "@/lib/evaluation-server";
 
 export const runtime = "nodejs";
@@ -8,9 +8,7 @@ export const runtime = "nodejs";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-
-const missingConfig = !supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey || !openaiApiKey;
+const missingConfig = !supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey || !isBedrockConfigured();
 
 const createAuthedUserClient = (token: string) =>
   createClient(supabaseUrl!, supabaseAnonKey!, {
@@ -24,8 +22,6 @@ const createAuthedUserClient = (token: string) =>
 const serviceClient = missingConfig
   ? null
   : createClient(supabaseUrl!, supabaseServiceRoleKey!);
-
-const openai = missingConfig ? null : new OpenAI({ apiKey: openaiApiKey });
 
 const extractBearer = (request: NextRequest) => {
   const authHeader = request.headers.get("authorization") ?? "";
@@ -67,7 +63,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (missingConfig || !serviceClient || !openai) {
+  if (missingConfig || !serviceClient) {
     return NextResponse.json({ error: "Server configuration is missing." }, { status: 500 });
   }
 
@@ -175,12 +171,7 @@ export async function POST(request: NextRequest) {
         "4) 마지막에 3줄 요약 bullet 포함",
       ].join("\n");
 
-  const response = await openai.responses.create({
-    model: "gpt-4o-mini",
-    input: prompt,
-  });
-
-  const generatedText = response.output_text?.trim();
+  const generatedText = await invokeBedrockText(prompt, { useKnowledgeBase: true });
   if (!generatedText) {
     return NextResponse.json({ error: "Failed to generate cover letter." }, { status: 500 });
   }
@@ -193,7 +184,7 @@ export async function POST(request: NextRequest) {
       job_description: jobDescription,
       tone,
       generated_text: generatedText,
-      model: "gpt-4o-mini",
+      model: getBedrockModelId(),
     })
     .select("id, created_at")
     .single();

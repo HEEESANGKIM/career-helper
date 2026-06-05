@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { clampScore, cleanText, getUserIdFromRequest, openai, parseJsonObject, saveEvaluation, saveFeatureRecord } from "@/lib/evaluation-server";
+import { invokeBedrockJson, isBedrockConfigured } from "@/lib/bedrock-client";
+import { clampScore, cleanText, getUserIdFromRequest, saveEvaluation, saveFeatureRecord } from "@/lib/evaluation-server";
 
 export const runtime = "nodejs";
 
@@ -96,7 +97,7 @@ function fallback(profile: ProfileRow | null, language: LanguageMode) {
 }
 
 type NextMoveResult = Omit<ReturnType<typeof fallback>, "source"> & {
-  source: "profile_fallback" | "openai";
+  source: "profile_fallback" | "bedrock";
 };
 
 export async function POST(request: NextRequest) {
@@ -113,21 +114,17 @@ export async function POST(request: NextRequest) {
   const base = fallback(profile ?? null, language) as NextMoveResult;
 
   let result: NextMoveResult = base;
-  if (openai && profile) {
+  if (isBedrockConfigured() && profile) {
     try {
-      const response = await openai.responses.create({
-        model: process.env.OPENAI_EVALUATION_MODEL?.trim() || "gpt-4.1-mini",
-        input: [
-          "Personalize PathMate.ai Next Move career strategy board from the authenticated user's profile.",
-          `Return JSON only in ${language === "en" ? "English" : "Korean"}.`,
-          "Schema: {currentPosition:{gpa,skills:string[],projects:string[],internshipExperience,resumeScore,interviewScore,careerGoal},moveCandidates:[{id,title,category,riskLevel,rewardLevel,effort,timeCost,confidence,expectedHiringImpact}],recommendedMove:{id,title,reason},threeMovesAhead:string[],endgameGoal,endgamePlan:string[],dailyMove,xp,level,streak,completedMoves}",
-          "Use only evidence from profile and reasonable inferences. Do not make it look like chess gameplay.",
-          `fallback: ${JSON.stringify(base)}`,
-          `profile: ${JSON.stringify(profile)}`,
-        ].join("\n"),
-        temperature: 0.2,
-      });
-      const parsed = parseJsonObject(response.output_text ?? "") as Partial<typeof base> | null;
+      const prompt = [
+        "Personalize PathMate.ai Next Move career strategy board from the authenticated user's profile.",
+        `Return JSON only in ${language === "en" ? "English" : "Korean"}.`,
+        "Schema: {currentPosition:{gpa,skills:string[],projects:string[],internshipExperience,resumeScore,interviewScore,careerGoal},moveCandidates:[{id,title,category,riskLevel,rewardLevel,effort,timeCost,confidence,expectedHiringImpact}],recommendedMove:{id,title,reason},threeMovesAhead:string[],endgameGoal,endgamePlan:string[],dailyMove,xp,level,streak,completedMoves}",
+        "Use only evidence from profile and reasonable inferences. Do not make it look like chess gameplay.",
+        `fallback: ${JSON.stringify(base)}`,
+        `profile: ${JSON.stringify(profile)}`,
+      ].join("\n");
+      const parsed = (await invokeBedrockJson(prompt, { temperature: 0.2, useKnowledgeBase: true })) as Partial<typeof base> | null;
       if (parsed) {
         result = {
           ...base,
@@ -135,7 +132,7 @@ export async function POST(request: NextRequest) {
           currentPosition: { ...base.currentPosition, ...parsed.currentPosition },
           moveCandidates: Array.isArray(parsed.moveCandidates) && parsed.moveCandidates.length ? parsed.moveCandidates : base.moveCandidates,
           recommendedMove: { ...base.recommendedMove, ...parsed.recommendedMove },
-          source: "openai",
+          source: "bedrock",
         } as NextMoveResult;
       }
     } catch {

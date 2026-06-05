@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import { invokeBedrockJson, isBedrockConfigured } from "@/lib/bedrock-client";
 
 export type LanguageMode = "ko" | "en";
 export type FeatureType = "hiring-manager" | "career-chess" | "background-check" | "interview";
@@ -8,9 +8,10 @@ export type FeatureType = "hiring-manager" | "career-chess" | "background-check"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
+/** @deprecated Use isBedrockConfigured / invokeBedrockJson instead. Kept for gradual migration. */
+export const openai = isBedrockConfigured() ? ({ configured: true } as const) : null;
 
-export const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null;
+export { isBedrockConfigured };
 
 const serviceClient =
   supabaseUrl && supabaseServiceRoleKey ? createClient(supabaseUrl, supabaseServiceRoleKey) : null;
@@ -61,15 +62,14 @@ export const parseJsonObject = (text: string) => {
 };
 
 export async function requestEvaluationJson(prompt: string) {
-  if (!openai) return null;
+  if (!isBedrockConfigured()) return null;
 
-  const response = await openai.responses.create({
-    model: process.env.OPENAI_EVALUATION_MODEL?.trim() || "gpt-4.1-mini",
-    input: prompt,
-    temperature: 0.2,
-  });
-
-  return parseJsonObject(response.output_text?.trim() ?? "");
+  try {
+    const parsed = await invokeBedrockJson(prompt, { temperature: 0.2, useKnowledgeBase: true });
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : parseJsonObject(String(parsed ?? ""));
+  } catch {
+    return null;
+  }
 }
 
 const extractBearer = (request: NextRequest) => {

@@ -12,9 +12,14 @@
     "data:h1b": "tsx scripts/data/ingest_h1b_lca.ts",
     "data:templates": "tsx scripts/data/build_career_templates.ts",
     "data:synthetic": "tsx scripts/data/generate_synthetic_profiles.ts",
-    "data:seed": "tsx scripts/data/seed_database.ts"
+    "data:seed": "tsx scripts/data/seed_database.ts",
+    "test:bedrock": "tsx scripts/test-bedrock.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock": "^3.1062.0",
+    "@aws-sdk/client-bedrock-agent": "^3.1062.0",
+    "@aws-sdk/client-bedrock-agent-runtime": "^3.1062.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1062.0",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/supabase-js": "^2.99.1",
     "clsx": "^2.1.1",

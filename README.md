@@ -26,7 +26,6 @@ An AI-powered career cockpit for students and job seekers. PathMate helps users 
 | **Hiring Simulator** | `/hiring-simulator` | Application fit, interview question practice, and answer feedback |
 | **Next Move** | `/next-move` | Career strategy board to compare paths, risk, and long-term outcomes |
 | **Job Match** | `/matching` | Profile-based live job search with fit scores and favorites |
-| **Background Check** | `/background-check` | AI review of public links and application content |
 
 **Also included**
 - Bilingual UI (Korean / English)
@@ -175,12 +174,6 @@ npm run build
 npm start
 ```
 
-### Useful scripts
-```bash
-npm run lint          # ESLint
-npm run data:seed     # Seed career reference data (optional)
-```
-
 ---
 
 ## 7. API Overview
@@ -213,7 +206,3 @@ We use **GitHub Issues**:
 4. Add a label when possible (`bug`, `ui`, `ai-api`, etc.).
 
 ---
-
-## License
-
-Private academic / project repository. All rights reserved by the team unless stated otherwise.

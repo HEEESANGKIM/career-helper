@@ -23,7 +23,7 @@ export function NextMoveShell() {
   };
 
   return (
-    <main className="min-h-screen bg-[#050816] px-4 py-7 text-slate-100 sm:px-6 lg:px-8">
+    <main className="next-move-shell px-4 py-7 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-[1500px]">
         {screen === "intro" ? (
           <GameIntroPanel language={gameLanguage} onStart={() => setScreen("theme-select")} onSample={() => setScreen("run")} />

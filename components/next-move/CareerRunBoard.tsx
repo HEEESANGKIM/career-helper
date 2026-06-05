@@ -101,11 +101,11 @@ export function CareerRunBoard({
     const win = score >= 190 && stats.burnout < 85;
     return (
       <motion.section initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="mx-auto max-w-4xl py-12 text-center">
-        <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-200">{isKo ? "런 종료" : "Run Complete"}</p>
-        <h1 className={`mt-4 text-5xl font-black ${win ? "text-cyan-100" : "text-rose-100"}`}>
+        <p className="next-move-eyebrow">{isKo ? "런 종료" : "Run Complete"}</p>
+        <h1 className={`mt-4 text-5xl font-black ${win ? "text-[var(--accent-2)]" : "text-[var(--danger)]"}`}>
           {win ? (isKo ? "승리 엔딩" : "Win Ending") : isKo ? "패배 엔딩" : "Lose Ending"}
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-slate-400">
+        <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-[var(--muted)]">
           {win
             ? isKo
               ? "5년 동안 충분한 커리어 모멘텀을 만들었습니다. 다음 런에서는 더 높은 점수를 노려보세요."
@@ -130,9 +130,9 @@ export function CareerRunBoard({
     <section>
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-cyan-100">Next Move Run</p>
-          <h1 className="mt-5 text-5xl font-black leading-none text-white sm:text-6xl">{isKo ? selectedTheme.titleKo : selectedTheme.title} Run</h1>
-          <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-400">
+          <p className="next-move-kicker">Next Move Run</p>
+          <h1 className="mt-5 text-5xl font-black leading-none text-[var(--foreground)] sm:text-6xl">{isKo ? selectedTheme.titleKo : selectedTheme.title} Run</h1>
+          <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-[var(--muted)]">
             {isKo ? "이벤트 1개와 행동 2개를 선택해 5년 커리어 런을 진행하세요." : "Choose 1 event and 2 actions each year to complete a 5-year career run."}
           </p>
         </div>
@@ -143,14 +143,14 @@ export function CareerRunBoard({
         <PlayerStatusCard language={language} theme={selectedTheme} stats={stats} />
 
         <div className="grid gap-5">
-          <section className={`rounded-[32px] border border-white/10 bg-gradient-to-br ${selectedTheme.accentClass} p-5 shadow-[var(--shadow)]`}>
+          <section className={`rounded-[32px] border border-[var(--line)] bg-gradient-to-br ${selectedTheme.accentClass} p-5 shadow-[var(--shadow)]`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-white/60">{isKo ? "현재 선택" : "Current Decision"}</p>
-                <h2 className="mt-1 text-3xl font-black text-white">{isKo ? scenario.titleKo : scenario.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-white/70">{isKo ? scenario.promptKo : scenario.prompt}</p>
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--muted)]">{isKo ? "현재 선택" : "Current Decision"}</p>
+                <h2 className="mt-1 text-3xl font-black text-[var(--foreground)]">{isKo ? scenario.titleKo : scenario.title}</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted-strong)]">{isKo ? scenario.promptKo : scenario.prompt}</p>
               </div>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-black text-white/72">
+              <span className="next-move-chip px-3 py-1 text-xs font-black">
                 {isKo ? `${currentYear} / 5년차` : `Year ${currentYear} / 5`}
               </span>
             </div>
@@ -166,18 +166,18 @@ export function CareerRunBoard({
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -12 }}
-                className="rounded-[28px] border border-cyan-200/20 bg-[linear-gradient(180deg,rgba(8,47,73,0.76),rgba(2,6,23,0.96))] p-5 shadow-[var(--shadow-soft)]"
+                className="next-move-panel"
               >
-                <p className="text-xs font-black uppercase tracking-[0.12em] text-cyan-200">{isKo ? "연말 리포트" : "Year-End Report"}</p>
-                <h2 className="mt-1 text-2xl font-black text-white">{isKo ? `${latestReport.year}년차 결과` : `Year ${latestReport.year} Results`}</h2>
+                <p className="next-move-eyebrow">{isKo ? "연말 리포트" : "Year-End Report"}</p>
+                <h2 className="mt-1 text-2xl font-black text-[var(--foreground)]">{isKo ? `${latestReport.year}년차 결과` : `Year ${latestReport.year} Results`}</h2>
                 <div className="mt-4 grid gap-3 md:grid-cols-5">
                   {(Object.keys(latestReport.after) as Array<keyof GameStats>).map((key) => {
                     const delta = latestReport.after[key] - latestReport.before[key];
                     return (
-                      <div key={key} className="rounded-2xl border border-white/10 bg-white/[0.045] p-3">
-                        <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{statLabels[language][key]}</p>
-                        <p className="mt-2 text-xl font-black text-white">{latestReport.after[key]}</p>
-                        <p className={delta >= 0 ? "mt-1 text-xs font-black text-emerald-200" : "mt-1 text-xs font-black text-rose-200"}>
+                      <div key={key} className="next-move-subcard p-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">{statLabels[language][key]}</p>
+                        <p className="mt-2 text-xl font-black text-[var(--foreground)]">{latestReport.after[key]}</p>
+                        <p className={delta >= 0 ? "mt-1 text-xs font-black text-[var(--success)]" : "mt-1 text-xs font-black text-[var(--danger)]"}>
                           {delta >= 0 ? "+" : ""}
                           {delta}
                         </p>
@@ -223,9 +223,9 @@ export function CareerRunBoard({
 
 function ResultTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-5">
-      <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{label}</p>
-      <p className="mt-2 text-2xl font-black text-white">{value}</p>
+    <div className="next-move-subcard rounded-3xl p-5">
+      <p className="text-[10px] font-black uppercase tracking-[0.08em] text-[var(--muted)]">{label}</p>
+      <p className="mt-2 text-2xl font-black text-[var(--foreground)]">{value}</p>
     </div>
   );
 }

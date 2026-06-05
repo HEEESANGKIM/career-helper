@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Star } from "lucide-react";
 import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
@@ -28,19 +29,6 @@ type EvidenceSource = {
   url: string;
   sourceType: "official_api" | "job_posting" | "search_result";
   verifiedAt: string;
-};
-
-type MarketInsights = {
-  source: "verified_web_search" | "cache";
-  searchedAt: string;
-  postingPoolSize: number | null;
-  postingsChecked: number;
-  averageApplicantsPerPosting: number | null;
-  averageViewsPerPosting: number | null;
-  competitionLevel: CompetitionLevel;
-  summary: string;
-  caveat: string;
-  evidence: EvidenceSource[];
 };
 
 type RealJob = {
@@ -80,11 +68,9 @@ export default function MatchingPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [jobPool, setJobPool] = useState<RealJob[]>([]);
-  const [poolIndex, setPoolIndex] = useState(0);
   const [realJobs, setRealJobs] = useState<RealJob[]>([]);
   const [recommendedRoles, setRecommendedRoles] = useState<string[]>([]);
   const [realJobsSource, setRealJobsSource] = useState("");
-  const [marketInsights, setMarketInsights] = useState<MarketInsights | null>(null);
   const [realJobsLoading, setRealJobsLoading] = useState(false);
   const [realJobsRefreshing, setRealJobsRefreshing] = useState(false);
   const [realJobsMessage, setRealJobsMessage] = useState("");
@@ -94,12 +80,9 @@ export default function MatchingPage() {
   const [detailAnalysis, setDetailAnalysis] = useState<JobDetailAnalysis | null>(null);
   const [detailJob, setDetailJob] = useState<RealJob | null>(null);
   const [applicationStatuses, setApplicationStatuses] = useState<Record<string, string>>({});
+  const [favoriteByUrl, setFavoriteByUrl] = useState<Record<string, string>>({});
+  const [favoriteSavingUrl, setFavoriteSavingUrl] = useState("");
   const jobsFetchInFlightRef = useRef(false);
-
-  const formatNumber = (value: number | null | undefined) => {
-    if (typeof value !== "number") return t("미공개", "Not public");
-    return value.toLocaleString(isEn ? "en-US" : "ko-KR");
-  };
 
   const competitionLabel = (level: CompetitionLevel) => {
     if (level === "high") return t("높음", "High");
@@ -147,26 +130,16 @@ export default function MatchingPage() {
 
   const applyJobPoolResponse = useCallback((json: Record<string, unknown>) => {
     const pool = (Array.isArray(json.pool) ? json.pool : json.items) as RealJob[];
-    const index =
-      typeof json.poolIndex === "number"
-        ? json.poolIndex
-        : pool.length > 0
-          ? 0
-          : 0;
-    const safeIndex = pool.length > 0 ? Math.min(Math.max(0, index), pool.length - 1) : 0;
     setJobPool(pool);
-    setPoolIndex(safeIndex);
-    setRealJobs(pool[safeIndex] ? [pool[safeIndex]] : []);
+    setRealJobs(pool);
     setRecommendedRoles((json.recommendedRoles as string[]) ?? []);
     setRealJobsSource(String(json.source ?? ""));
-    setMarketInsights((json.marketInsights as MarketInsights) ?? null);
     setPoolNote(typeof json.poolNote === "string" ? json.poolNote : "");
   }, []);
 
   const fetchRealJobs = useCallback(
     async (options?: {
       refresh?: boolean;
-      poolIndex?: number;
       accessToken?: string;
       excludeUrls?: string[];
     }) => {
@@ -199,8 +172,6 @@ export default function MatchingPage() {
         if (seen.length > 0) {
           params.set("exclude", seen.join(","));
         }
-      } else if (typeof options?.poolIndex === "number") {
-        params.set("poolIndex", String(options.poolIndex));
       }
 
       try {
@@ -236,22 +207,88 @@ export default function MatchingPage() {
     [applyJobPoolResponse, language, t],
   );
 
-  const showNextJobInPool = useCallback(() => {
-    if (jobPool.length === 0) return;
-    const nextIndex = poolIndex + 1;
-    if (nextIndex < jobPool.length) {
-      setPoolIndex(nextIndex);
-      setRealJobs([jobPool[nextIndex]]);
-      setRefreshError("");
-      setDetailAnalysis(null);
-      setDetailJob(null);
-      return;
-    }
+  const loadNextJobBatch = useCallback(() => {
     void fetchRealJobs({
       refresh: true,
       excludeUrls: jobPool.map((job) => job.url).filter(Boolean),
     });
-  }, [fetchRealJobs, jobPool, poolIndex]);
+  }, [fetchRealJobs, jobPool]);
+
+  const openJobPosting = useCallback((url: string) => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, []);
+
+  const loadFavorites = useCallback(async (accessToken: string) => {
+    const res = await fetch("/api/job-favorites", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok) return;
+
+    const next: Record<string, string> = {};
+    for (const item of (json?.items as Array<{ id: string; job_url: string }>) ?? []) {
+      if (item?.id && item?.job_url) next[item.job_url] = item.id;
+    }
+    setFavoriteByUrl(next);
+  }, []);
+
+  const toggleFavorite = useCallback(
+    async (job: RealJob) => {
+      const session = await getSessionWithRetry();
+      const token = session?.access_token;
+      if (!token) {
+        window.location.href = "/login";
+        return;
+      }
+
+      setFavoriteSavingUrl(job.url);
+      const existingId = favoriteByUrl[job.url];
+
+      if (existingId) {
+        const res = await fetch("/api/job-favorites", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ id: existingId }),
+        });
+        setFavoriteSavingUrl("");
+        if (res.ok) {
+          setFavoriteByUrl((prev) => {
+            const next = { ...prev };
+            delete next[job.url];
+            return next;
+          });
+        }
+        return;
+      }
+
+      const res = await fetch("/api/job-favorites", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          url: job.url,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          summary: job.summary,
+          fitScore: job.fitScore,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      setFavoriteSavingUrl("");
+
+      if (res.ok && json?.item?.id && json?.item?.job_url) {
+        setFavoriteByUrl((prev) => ({ ...prev, [json.item.job_url]: json.item.id }));
+      }
+    },
+    [favoriteByUrl],
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -292,11 +329,14 @@ export default function MatchingPage() {
       setLoading(false);
 
       if (!session.access_token) return;
-      await fetchRealJobs({ accessToken: session.access_token });
+      await Promise.all([
+        fetchRealJobs({ accessToken: session.access_token }),
+        loadFavorites(session.access_token),
+      ]);
     };
 
     void load();
-  }, [language, fetchRealJobs]);
+  }, [language, fetchRealJobs, loadFavorites]);
 
   const loadJobDetailAnalysis = async (job: RealJob, idx: number) => {
     if (!profile) return;
@@ -419,19 +459,34 @@ export default function MatchingPage() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <SectionTitle title={t("현재 모집중 실공고 추천", "Live Job Recommendations")} description={sourceLabel(realJobsSource)} />
+              <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <SectionTitle
+                  title={t("현재 모집중 실공고 추천", "Live Job Recommendations")}
+                  description={
+                    jobPool.length > 0
+                      ? t(`검증된 추천 ${jobPool.length}건`, `${jobPool.length} verified pick(s)`)
+                      : sourceLabel(realJobsSource)
+                  }
+                />
                 {jobPool.length > 0 && (
-                  <p className="text-xs font-medium text-[var(--muted)]">
-                    {t("추천", "Pick")} {poolIndex + 1} / {jobPool.length}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={loadNextJobBatch}
+                    disabled={realJobsLoading || realJobsRefreshing}
+                    className="primary-btn w-fit px-3 py-2 text-sm disabled:opacity-60"
+                  >
+                    {realJobsRefreshing
+                      ? t("검색 중...", "Searching...")
+                      : t("다음 추천", "Next picks")}
+                  </button>
                 )}
               </div>
               <p className="mt-1 text-xs text-[var(--muted)]">
                 {sourceLabel(realJobsSource)}
-                {jobPool.length > 1
-                  ? t(" · 대기 중인 추천이 있으면 버튼 한 번으로 다음 공고를 바로 볼 수 있습니다.", " · Queued picks load instantly; a new web search runs when the queue is empty.")
-                  : ""}
+                {t(
+                  " · ‘다음 추천’을 누르면 저장된 목록을 지우고 새 실공고를 다시 찾습니다. 검증 결과에 따라 개수는 달라질 수 있습니다.",
+                  " · “Next picks” clears saved results and runs a fresh search. The number of verified postings may vary.",
+                )}
               </p>
 
               {(realJobsLoading || realJobsRefreshing) && (
@@ -449,30 +504,6 @@ export default function MatchingPage() {
               )}
               {!realJobsLoading && !realJobsRefreshing && poolNote && (
                 <Notice className="mt-2">{poolNote}</Notice>
-              )}
-              {!realJobsLoading && !realJobsRefreshing && !realJobsMessage && marketInsights && (
-                <div className="content-card mt-3 p-4">
-                  <div className="responsive-card-grid text-sm">
-                    <div className="content-card p-3 text-[var(--muted-strong)]">
-                      <p className="text-xs font-medium text-[var(--muted)]">{t("평균 지원자수/공고", "Avg. applicants/posting")}</p>
-                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{formatNumber(marketInsights.averageApplicantsPerPosting)}</p>
-                    </div>
-                    <div className="content-card p-3 text-[var(--muted-strong)]">
-                      <p className="text-xs font-medium text-[var(--muted)]">{t("평균 조회수/공고", "Avg. views/posting")}</p>
-                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{formatNumber(marketInsights.averageViewsPerPosting)}</p>
-                    </div>
-                    <div className="content-card p-3 text-[var(--muted-strong)]">
-                      <p className="text-xs font-medium text-[var(--muted)]">{t("경쟁 강도", "Competition level")}</p>
-                      <p className="mt-1 text-lg font-semibold text-[var(--foreground)]">{competitionLabel(marketInsights.competitionLevel)}</p>
-                    </div>
-                  </div>
-                  <p className="ko-friendly mt-3 text-xs leading-5 text-[var(--muted)]">{marketInsights.summary}</p>
-                  <p className="ko-friendly mt-1 text-xs leading-5 text-[var(--muted)]">{marketInsights.caveat}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {t("검증 공고", "Checked postings")}: {marketInsights.postingsChecked}
-                    {marketInsights.postingPoolSize ? ` / ${t("검색 풀", "Search pool")}: ${formatNumber(marketInsights.postingPoolSize)}` : ""}
-                  </p>
-                </div>
               )}
               {!realJobsLoading && !realJobsRefreshing && !realJobsMessage && realJobs.length > 0 && (
                 <div className="mt-3 space-y-3">
@@ -502,21 +533,40 @@ export default function MatchingPage() {
                           <p className="ko-friendly mt-3 text-sm leading-6 text-[var(--muted-strong)]">{job.summary}</p>
                         </div>
                         <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                          <button
-                            type="button"
-                            onClick={() => void showNextJobInPool()}
-                            disabled={realJobsLoading || realJobsRefreshing}
-                            className="primary-btn px-2 py-1 text-xs disabled:opacity-60"
-                          >
-                            {realJobsRefreshing
-                              ? t("검색 중...", "Searching...")
-                              : poolIndex + 1 < jobPool.length
-                                ? t("다음 추천 보기", "Next pick")
-                                : t("새 목록 검색", "Search new picks")}
-                          </button>
-                          <a href={job.url} target="_blank" rel="noreferrer" className="secondary-btn px-2 py-1 text-xs text-center">
-                            {t("공고 보기", "View posting")}
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void toggleFavorite(job)}
+                              disabled={favoriteSavingUrl === job.url}
+                              aria-pressed={Boolean(favoriteByUrl[job.url])}
+                              aria-label={
+                                favoriteByUrl[job.url]
+                                  ? t("즐겨찾기 해제", "Remove from favorites")
+                                  : t("즐겨찾기 저장", "Save to favorites")
+                              }
+                              className={`secondary-btn px-2 py-1 text-xs disabled:opacity-60 ${
+                                favoriteByUrl[job.url] ? "text-[var(--warning)]" : ""
+                              }`}
+                            >
+                              <Star
+                                size={14}
+                                aria-hidden="true"
+                                className={favoriteByUrl[job.url] ? "fill-current" : ""}
+                              />
+                              {favoriteSavingUrl === job.url
+                                ? t("저장 중...", "Saving...")
+                                : favoriteByUrl[job.url]
+                                  ? t("저장됨", "Saved")
+                                  : t("즐겨찾기", "Favorite")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openJobPosting(job.url)}
+                              className="primary-btn px-2 py-1 text-xs text-center"
+                            >
+                              {t("공고 보기", "View posting")}
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <div className="responsive-card-grid mt-4 text-xs">
@@ -543,15 +593,12 @@ export default function MatchingPage() {
                       <p className="mt-1 text-xs text-[var(--muted)]">
                         {t("게시일", "Posted")}: {job.publishedAt || "unknown"} / {t("마감", "Deadline")}: {job.deadline || "unknown"}
                       </p>
-                      {job.evidence?.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                          {job.evidence.slice(0, 2).map((source) => (
-                            <a key={`${job.url}-${source.url}-${source.label}`} href={source.url} target="_blank" rel="noreferrer" className="font-medium text-[var(--accent-2)] hover:text-[var(--accent-2)]">
-                              {source.label}
-                            </a>
-                          ))}
-                        </div>
-                      )}
+                      {job.url ? (
+                        <p className="mt-2 text-xs text-[var(--muted)]">
+                          {t("원문 링크", "Source link")}:{" "}
+                          <span className="break-all text-[var(--muted-strong)]">{job.url}</span>
+                        </p>
+                      ) : null}
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <div className="content-card p-3">
                           <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--success)]">{t("Matched strengths", "Matched strengths")}</p>

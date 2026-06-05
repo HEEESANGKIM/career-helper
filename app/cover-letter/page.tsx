@@ -38,6 +38,7 @@ export default function CoverLetterPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [deletingId, setDeletingId] = useState("");
 
   const getAuthHeader = useCallback(async () => {
     if (!supabase || !isSupabaseConfigured) return "";
@@ -134,6 +135,44 @@ export default function CoverLetterPage() {
     setMessage(t("이전 입력값을 불러왔습니다. 재생성 버튼을 누르면 새 버전이 생성됩니다.", "Previous input loaded. Click generate to create a new version."));
   };
 
+  const handleDelete = async (item: CoverLetterItem) => {
+    const confirmed = window.confirm(
+      t("이 히스토리를 삭제할까요? 삭제 후에는 복구할 수 없습니다.", "Delete this history item? This cannot be undone."),
+    );
+    if (!confirmed) return;
+
+    const authHeader = await getAuthHeader();
+    if (!authHeader) {
+      window.location.href = "/login";
+      return;
+    }
+
+    setDeletingId(item.id);
+    setMessage("");
+
+    const res = await fetch("/api/cover-letter", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({ id: item.id }),
+    });
+    const json = await res.json();
+    setDeletingId("");
+
+    if (!res.ok) {
+      setMessage(json.error ?? t("삭제에 실패했습니다.", "Failed to delete."));
+      return;
+    }
+
+    setHistory((prev) => prev.filter((entry) => entry.id !== item.id));
+    if (generatedText === item.generated_text) {
+      setGeneratedText("");
+    }
+    setMessage(t("히스토리를 삭제했습니다.", "History item deleted."));
+  };
+
   return (
     <PageShell maxWidth="max-w-7xl">
       <PageHeader
@@ -216,7 +255,9 @@ export default function CoverLetterPage() {
               <textarea value={generatedText} readOnly className="field min-h-52" />
             </div>
           ) : (
-            <EmptyState>{t("아직 생성된 초안이 없습니다. 왼쪽 컨텍스트를 입력하고 생성해 주세요.", "No draft yet. Add context on the left and generate a draft.")}</EmptyState>
+            <div className="mt-5">
+              <EmptyState>{t("아직 생성된 초안이 없습니다. 왼쪽 컨텍스트를 입력하고 생성해 주세요.", "No draft yet. Add context on the left and generate a draft.")}</EmptyState>
+            </div>
           )}
           <div className="content-card mt-5 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--warning)]">{t("Missing evidence hints", "Missing evidence hints")}</p>
@@ -238,12 +279,20 @@ export default function CoverLetterPage() {
           ) : (
             <div className="mt-5 grid gap-3 lg:grid-cols-2">
               {history.map((item) => (
-                <div key={item.id} className="content-card p-4">
+                <div key={item.id} className="content-card flex min-h-[11rem] flex-col p-4">
                   <p className="text-xs text-[var(--muted)]">{new Date(item.created_at).toLocaleString(isEn ? "en-US" : "ko-KR")}</p>
-                  <p className="mt-1 text-sm text-[var(--muted-strong)] line-clamp-2">{item.generated_text}</p>
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                    <button onClick={() => handleReuse(item)} className="secondary-btn px-3 py-1.5 text-xs">
+                  <p className="ko-friendly mt-2 flex-1 text-sm leading-6 text-[var(--muted-strong)] line-clamp-3">{item.generated_text}</p>
+                  <div className="mt-4 flex items-end justify-between gap-3">
+                    <button type="button" onClick={() => handleReuse(item)} className="secondary-btn px-3 py-1.5 text-xs">
                       {t("불러와서 재생성", "Load and regenerate")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(item)}
+                      disabled={deletingId === item.id}
+                      className="danger-btn px-3 py-1.5 text-xs disabled:opacity-60"
+                    >
+                      {deletingId === item.id ? t("삭제 중...", "Deleting...") : t("삭제", "Delete")}
                     </button>
                   </div>
                 </div>

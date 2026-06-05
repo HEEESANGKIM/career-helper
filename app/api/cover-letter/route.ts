@@ -208,3 +208,44 @@ export async function POST(request: NextRequest) {
     generatedText,
   });
 }
+
+export async function DELETE(request: NextRequest) {
+  if (missingConfig || !serviceClient) {
+    return NextResponse.json({ error: "Server configuration is missing." }, { status: 500 });
+  }
+
+  const token = extractBearer(request);
+  const user = await getUserFromToken(token);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const id = typeof body?.id === "string" ? body.id.trim() : "";
+  if (!id) {
+    return NextResponse.json({ error: "id is required." }, { status: 400 });
+  }
+
+  const { data: existing, error: lookupError } = await serviceClient
+    .from("cover_letters")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (lookupError) {
+    return NextResponse.json({ error: lookupError.message }, { status: 500 });
+  }
+
+  if (!existing) {
+    return NextResponse.json({ error: "Cover letter not found." }, { status: 404 });
+  }
+
+  const { error: deleteError } = await serviceClient.from("cover_letters").delete().eq("id", id).eq("user_id", user.id);
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

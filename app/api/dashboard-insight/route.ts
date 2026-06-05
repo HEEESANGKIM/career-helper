@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getSyntheticProfiles, type SyntheticCareerProfile } from "@/lib/career-data";
+import { parseProfileSkills } from "@/lib/skill-list";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,7 @@ type ProfileRow = {
   gpa_score?: number | null;
   core_skills?: string | null;
   tech_stack?: string | null;
+  skills?: string | null;
   role_certifications?: string | null;
   language_test_score?: string | null;
   internship_count?: number | null;
@@ -63,13 +65,6 @@ const cleanText = (value: unknown) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const splitTerms = (...values: Array<string | null | undefined>) =>
-  values
-    .join(",")
-    .split(/[,/|\n]/)
-    .map((item) => cleanText(item))
-    .filter(Boolean);
-
 const clamp = (value: number) => Math.max(5, Math.min(92, Math.round(value)));
 
 const hasMeasurableAchievement = (profile: ProfileRow | null) => /\d|%|\$|won|달러|명|개|배|시간|users|revenue|reduced|increased/i.test(cleanText(profile?.experience_summary));
@@ -80,7 +75,7 @@ const isGenericGoal = (profile: ProfileRow | null) => {
   return ["developer", "engineer", "manager", "intern", "개발자", "엔지니어", "인턴", "취업"].includes(role);
 };
 
-const getSkillDepth = (profile: ProfileRow | null) => splitTerms(profile?.core_skills, profile?.tech_stack).length;
+const getSkillDepth = (profile: ProfileRow | null) => parseProfileSkills(profile).length;
 
 const collectPenalties = (profile: ProfileRow | null): Penalty[] => {
   const penalties: Penalty[] = [];
@@ -211,7 +206,7 @@ const benchmarkAgainstSyntheticProfiles = (score: number) => {
 
 const recommendedRoles = (profile: ProfileRow | null, language: LanguageMode) => {
   const role = cleanText(profile?.target_role);
-  const skills = splitTerms(profile?.core_skills, profile?.tech_stack).join(" ").toLowerCase();
+  const skills = parseProfileSkills(profile).join(" ").toLowerCase();
   const roles = new Set<string>();
   if (role) roles.add(role);
   if (/sql|data|python|analysis|analytics/.test(skills)) roles.add(language === "en" ? "Data Analyst" : "데이터 분석가");
@@ -241,7 +236,7 @@ export async function GET(request: NextRequest) {
   const { data: profile } = await serviceClient
     .from("profiles")
     .select(
-      "full_name, school_name, major, gpa_score, core_skills, tech_stack, role_certifications, language_test_score, internship_count, project_count, target_role, target_industry, preferred_location, portfolio_url, github_url, experience_summary",
+      "full_name, school_name, major, gpa_score, core_skills, tech_stack, skills, role_certifications, language_test_score, internship_count, project_count, target_role, target_industry, preferred_location, portfolio_url, github_url, experience_summary",
     )
     .eq("user_id", user.id)
     .maybeSingle<ProfileRow>();

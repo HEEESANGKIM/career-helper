@@ -3,8 +3,10 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BriefcaseBusiness, FileText, SearchCheck, Settings, Swords } from "lucide-react";
 import { EmptyState, Notice, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+import { parseProfileSkills } from "@/lib/skill-list";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
 
@@ -16,6 +18,7 @@ type DashboardProfile = {
   gpa_scale: number | null;
   core_skills: string | null;
   tech_stack: string | null;
+  skills: string | null;
   internship_count: number | null;
   project_count: number | null;
   target_role: string | null;
@@ -88,6 +91,7 @@ const quickLaunch = [
 ];
 
 export default function DashboardPage() {
+  const pathname = usePathname();
   const { language } = useLanguage();
   const isEn = language === "en";
   const t = (ko: string, en: string) => (isEn ? en : ko);
@@ -121,7 +125,7 @@ export default function DashboardPage() {
         supabase
           .from("profiles")
           .select(
-            "full_name, school_name, major, gpa_score, gpa_scale, core_skills, tech_stack, internship_count, project_count, target_role, target_industry, preferred_location, portfolio_url, github_url, experience_summary",
+            "full_name, school_name, major, gpa_score, gpa_scale, core_skills, tech_stack, skills, internship_count, project_count, target_role, target_industry, preferred_location, portfolio_url, github_url, experience_summary",
           )
           .eq("user_id", userData.user.id)
           .maybeSingle(),
@@ -150,19 +154,9 @@ export default function DashboardPage() {
 
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEn, language]);
+  }, [isEn, language, pathname]);
 
-  const skills = useMemo(
-    () =>
-      [profile?.core_skills, profile?.tech_stack]
-        .filter(Boolean)
-        .join(",")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 8),
-    [profile],
-  );
+  const skills = useMemo(() => parseProfileSkills(profile).slice(0, 8), [profile]);
 
   const scoreItems = insight
     ? [

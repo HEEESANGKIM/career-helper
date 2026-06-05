@@ -1,24 +1,29 @@
 ﻿"use client";
 
+import { Languages } from "lucide-react";
 import { useLanguage } from "@/components/language-provider";
 
 export default function LanguageToggle() {
   const { language, setLanguage } = useLanguage();
   const isEn = language === "en";
 
+  const toggleLanguage = () => {
+    setLanguage(isEn ? "ko" : "en");
+  };
+
+  const label = isEn ? "Switch to Korean" : "한국어에서 영어로 전환";
+  const currentLabel = isEn ? "English" : "한국어";
+
   return (
-    <label className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-xs font-semibold text-[var(--muted-strong)]">
-      <span className="hidden text-[11px] sm:inline">{isEn ? "Language" : "언어"}</span>
-      <select
-        value={language}
-        onChange={(e) => setLanguage(e.target.value as "ko" | "en")}
-        className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--muted-strong)] outline-none sm:text-[11px]"
-        aria-label={isEn ? "Language" : "언어"}
-      >
-        <option value="ko">한국어</option>
-        <option value="en">English</option>
-      </select>
-    </label>
+    <button
+      type="button"
+      onClick={toggleLanguage}
+      aria-label={label}
+      title={label}
+      className="secondary-btn px-3 py-2 text-xs"
+    >
+      <Languages size={15} aria-hidden="true" />
+      <span className="hidden sm:inline">{currentLabel}</span>
+    </button>
   );
 }
-

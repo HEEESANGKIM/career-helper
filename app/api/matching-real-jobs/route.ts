@@ -95,9 +95,10 @@ const TRUSTED_JOB_DOMAINS = [
 ];
 
 const CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-const POOL_TARGET_SIZE = 10;
-const MAX_CANDIDATES = 24;
-const MAX_POOL_SEARCH_PASSES = 3;
+/** How many verified postings to fetch and store per user (kept small to limit DB load). */
+const POOL_TARGET_SIZE = 3;
+const MAX_CANDIDATES = 10;
+const MAX_POOL_SEARCH_PASSES = 2;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -260,13 +261,32 @@ const buildProfileText = (profile: ProfileRow | null, coverLetters: CoverLetterR
     .filter(Boolean)
     .join(" | ");
 
+const KEYWORD_FRAGMENT_TITLES = new Set([
+  "backend",
+  "frontend",
+  "engineer",
+  "developer",
+  "computer",
+  "software",
+  "백엔드",
+  "프론트엔드",
+  "엔지니어",
+  "개발자",
+]);
+
+const isLikelyKeywordFragmentTitle = (title: string) => {
+  const normalized = title.trim().toLowerCase();
+  if (!normalized) return true;
+  if (KEYWORD_FRAGMENT_TITLES.has(normalized)) return true;
+  return normalized.split(/\s+/).length === 1 && normalized.length <= 10;
+};
+
 const fallbackRoles = (profile: ProfileRow | null, coverLetters: CoverLetterRow[]) => {
   const explicitRole = cleanText(profile?.target_role);
-  const terms = splitTerms(profile?.target_role, profile?.tech_stack, profile?.core_skills, profile?.major, ...coverLetters.map((item) => item.job_description ?? ""));
-  const roles = [explicitRole, ...terms]
-    .filter(Boolean)
-    .map((term) => (term.length > 18 ? term.slice(0, 18) : term));
-  return [...new Set(roles)].slice(0, 5);
+  if (explicitRole) return [explicitRole];
+
+  const terms = splitTerms(profile?.tech_stack, profile?.core_skills, profile?.major, ...coverLetters.map((item) => item.job_description ?? ""));
+  return [...new Set(terms)].slice(0, 3);
 };
 
 const parseAiJson = (text: string): unknown => {
@@ -300,7 +320,8 @@ const getRecommendedRoles = async (
         ? [
             "From the applicant profile and cover letter text, extract only realistic job search keywords for JSON output.",
             "Do not invent job titles or exaggerate roles.",
-            "Return 3-5 short keywords that work on major Korean job boards (JobKorea, Wanted, Incruit, Catch, RocketPunch, etc.). Keywords may be Korean or English as commonly used in postings.",
+            "Return 2-3 complete job title phrases (e.g. 'Backend Engineer', 'Software Engineer Intern') — never single generic words like 'backend', 'engineer', or 'computer' alone.",
+            "Each phrase must work as a search query on major Korean job boards (JobKorea, Wanted, Incruit, Catch, RocketPunch, etc.).",
             `All string values in the JSON must be in ${languageName(lang)} (use English role phrases in the roles array).`,
             'Schema: {"roles":["..."]}',
             "",
@@ -309,7 +330,8 @@ const getRecommendedRoles = async (
         : [
             "지원자 프로필/자소서 내용에서 실제 검색에 쓸 직무 키워드만 뽑아 JSON으로 출력한다.",
             "존재하지 않는 직무명이나 과장된 직무명은 만들지 않는다.",
-            "한국 채용 플랫폼에서 검색 가능한 짧은 키워드 3~5개만 추천한다.",
+            "한국 채용 플랫폼에서 검색 가능한 완전한 직무명 2~3개만 추천한다 (예: '백엔드 개발자', '소프트웨어 엔지니어 인턴').",
+            "'backend', 'engineer', 'computer'처럼 단어 하나만 쓰지 않는다.",
             `roles 배열의 모든 문자열은 ${languageName(lang)}로 작성한다.`,
             '스키마: {"roles":["..."]}',
             "",
@@ -323,7 +345,10 @@ const getRecommendedRoles = async (
 
     const parsed = parseAiJson(response.output_text?.trim() ?? "") as { roles?: unknown } | null;
     const roles = Array.isArray(parsed?.roles)
-      ? parsed.roles.map((role) => cleanText(role)).filter(Boolean).slice(0, 5)
+      ? parsed.roles
+          .map((role) => cleanText(role))
+          .filter((role) => Boolean(role) && !isLikelyKeywordFragmentTitle(role))
+          .slice(0, 3)
       : [];
     return roles.length > 0 ? roles : fallback;
   } catch {
@@ -420,7 +445,7 @@ const normalizeWebItem = (raw: unknown, profile: ProfileRow | null, lang: Langua
   const url = cleanText(job.url);
   const title = cleanText(job.title);
   const company = cleanText(job.company);
-  if (!url || !title || !company || !isTrustedJobUrl(url)) return null;
+  if (!url || !title || !company || !isTrustedJobUrl(url) || isLikelyKeywordFragmentTitle(title)) return null;
 
   const applicantCount = readNumber(job.applicantCount);
   const viewCount = readNumber(job.viewCount);
@@ -606,13 +631,17 @@ const buildVerifiedJobPool = async (
   lang: LanguageMode,
   excludeUrls: string[],
 ) => {
-  const roleSeeds = [...new Set([...roles, ...fallbackRoles(profile, coverLetters)])].slice(0, 8);
+  const cleanedRoles = roles.map((role) => cleanText(role)).filter((role) => role.length >= 3);
+  const roleSeeds =
+    cleanedRoles.length > 0
+      ? [...new Set(cleanedRoles)]
+      : fallbackRoles(profile, coverLetters);
+
   let pool: RealJob[] = [];
   const excluded = new Set(excludeUrls);
 
   for (let pass = 0; pass < MAX_POOL_SEARCH_PASSES && pool.length < POOL_TARGET_SIZE; pass += 1) {
-    const offset = pass * 3;
-    const searchRoles = roleSeeds.slice(offset, offset + 5);
+    const searchRoles = roleSeeds.slice(0, 3);
     if (searchRoles.length === 0) break;
 
     const batch = await fetchVerifiedWebJobs(searchRoles, profile, coverLetters, lang, [
@@ -766,7 +795,7 @@ const buildPoolPayload = (
     pool: localizedPool,
     poolIndex: safeIndex,
     poolSize: localizedPool.length,
-    items: localizedPool[safeIndex] ? [localizedPool[safeIndex]] : [],
+    items: localizedPool,
   };
 };
 
@@ -856,8 +885,8 @@ export async function GET(request: NextRequest) {
       const poolNote =
         cachedPool.length < POOL_TARGET_SIZE
           ? language === "en"
-            ? `Showing ${cachedPool.length} cached verified posting(s). Use “Search new picks” to run a fresh search (up to ${POOL_TARGET_SIZE}).`
-            : `저장된 검증 공고 ${cachedPool.length}건입니다. ‘새 목록 검색’으로 최대 ${POOL_TARGET_SIZE}건까지 다시 찾을 수 있습니다.`
+            ? `Showing ${cachedPool.length} cached verified posting(s). Use “Next picks” for a fresh search.`
+            : `저장된 검증 공고 ${cachedPool.length}건입니다. ‘다음 추천’으로 새 공고를 다시 찾을 수 있습니다.`
           : undefined;
 
       return NextResponse.json({
@@ -933,8 +962,8 @@ export async function GET(request: NextRequest) {
   const poolNote =
     pool.length < POOL_TARGET_SIZE
       ? language === "en"
-        ? `Verified ${pool.length} live posting(s) for your profile (target up to ${POOL_TARGET_SIZE}). This is not an account limit — try filling target role/skills or run “Search new picks” again.`
-        : `프로필 기준 검증된 실공고 ${pool.length}건입니다(목표 최대 ${POOL_TARGET_SIZE}건). 계정 제한이 아니라 검색·검증 결과이니, 희망직무·스킬을 보강하거나 ‘새 목록 검색’을 다시 시도해 보세요.`
+        ? `Verified ${pool.length} live posting(s) for your profile. Use “Next picks” to search again.`
+        : `프로필 기준 검증된 실공고 ${pool.length}건입니다. ‘다음 추천’으로 다시 검색할 수 있습니다.`
       : undefined;
 
   return NextResponse.json({

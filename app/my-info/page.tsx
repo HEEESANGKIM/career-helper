@@ -2,7 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+import { JobFavoritesPanel } from "@/components/job-favorites-panel";
+import { Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+import { mergeSkillList, parseSkillList } from "@/lib/skill-list";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
 
@@ -32,14 +34,6 @@ type SettingsForm = {
   portfolio_url: string;
   github_url: string;
   experience_summary: string;
-};
-
-type AlertItem = {
-  id: string;
-  company: string;
-  title: string;
-  postedAt: string;
-  url: string;
 };
 
 const initialForm: SettingsForm = {
@@ -80,13 +74,13 @@ export default function SettingsPage() {
   const [provider, setProvider] = useState("");
   const [joinedAtRaw, setJoinedAtRaw] = useState("");
   const [form, setForm] = useState<SettingsForm>(initialForm);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [message, setMessage] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [savedSkills, setSavedSkills] = useState({ core_skills: "", tech_stack: "" });
 
   const completion = useMemo(() => {
     const fields: Array<keyof SettingsForm> = [
@@ -106,26 +100,14 @@ export default function SettingsPage() {
   }, [form]);
 
   const skillChips = useMemo(
-    () =>
-      [form.core_skills, form.tech_stack]
-        .join(",")
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 10),
-    [form.core_skills, form.tech_stack],
+    () => parseSkillList(savedSkills.core_skills, savedSkills.tech_stack).slice(0, 10),
+    [savedSkills],
   );
 
   const joinedAt = useMemo(() => {
     if (!joinedAtRaw) return "-";
     return new Date(joinedAtRaw).toLocaleDateString(isEn ? "en-US" : "ko-KR");
   }, [isEn, joinedAtRaw]);
-
-  const loadAlerts = async (token: string) => {
-    const res = await fetch("/api/job-alerts", { headers: { Authorization: `Bearer ${token}` } });
-    const json = await res.json().catch(() => null);
-    if (res.ok) setAlerts(json?.items ?? []);
-  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -202,9 +184,12 @@ export default function SettingsPage() {
           github_url: data.github_url ?? "",
           experience_summary: data.experience_summary ?? "",
         });
+        setSavedSkills({
+          core_skills: data.core_skills ?? "",
+          tech_stack: data.tech_stack ?? "",
+        });
       }
 
-      await loadAlerts(session.access_token);
       setLoading(false);
     };
 
@@ -223,7 +208,9 @@ export default function SettingsPage() {
     const gpaScore = form.gpa_score ? Number(form.gpa_score) : null;
     const gpaScale = form.gpa_scale ? Number(form.gpa_scale) : null;
     const normalizedGpa = gpaScore && gpaScale ? (gpaScore / gpaScale) * 4.5 : null;
-    const mergedSkills = [form.core_skills, form.tech_stack].filter(Boolean).join(", ");
+    const trimmedCoreSkills = form.core_skills.trim();
+    const trimmedTechStack = form.tech_stack.trim();
+    const mergedSkills = mergeSkillList(trimmedCoreSkills, trimmedTechStack);
     const mergedCerts = [form.role_certifications, form.other_certifications].filter(Boolean).join(", ");
 
     setSaving(true);
@@ -242,9 +229,9 @@ export default function SettingsPage() {
         gpa_score: gpaScore,
         gpa_scale: gpaScale,
         gpa: normalizedGpa,
-        core_skills: form.core_skills.trim(),
-        tech_stack: form.tech_stack.trim(),
-        skills: mergedSkills,
+        core_skills: trimmedCoreSkills || null,
+        tech_stack: trimmedTechStack || null,
+        skills: mergedSkills || null,
         internship_count: Number(form.internship_count || 0),
         project_count: Number(form.project_count || 0),
         role_certifications: form.role_certifications.trim(),
@@ -270,13 +257,15 @@ export default function SettingsPage() {
       return;
     }
 
+    setSavedSkills({
+      core_skills: trimmedCoreSkills,
+      tech_stack: trimmedTechStack,
+    });
     setMessage(t("설정이 저장되었습니다.", "Settings saved."));
     setShowWelcome(false);
     if (window.location.search.includes("welcome=1")) {
       window.history.replaceState({}, "", "/settings");
     }
-    const session = await getSessionWithRetry();
-    if (session?.access_token) await loadAlerts(session.access_token);
   };
 
   const deleteAccount = async () => {
@@ -322,7 +311,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title={t("설정", "Settings")}
-        description={t("개인 정보, 목표 직무, 기술, 링크, 희망 기업 알림을 한 곳에서 관리합니다.", "Manage personal information, goals, skills, links, and company alerts in one place.")}
+        description={t("개인 정보, 목표 직무, 기술, 링크를 한 곳에서 관리합니다.", "Manage personal information, goals, skills, and links in one place.")}
         actions={
           <Link href="/dashboard" className="secondary-btn px-4 py-2 text-sm">
             {t("대시보드로 돌아가기", "Back to Dashboard")}
@@ -354,8 +343,8 @@ export default function SettingsPage() {
               <div className="mt-6 border-t border-[var(--line)] pt-5">
                 <p className="text-xs leading-5 text-[var(--muted)]">
                   {t(
-                    "계정을 삭제하면 프로필, 자소서, 매칭 캐시, 평가·인터뷰·시뮬레이션 기록이 모두 삭제됩니다.",
-                    "Deleting your account removes your profile, cover letters, matching cache, and all evaluation, interview, and simulation records.",
+                    "계정을 삭제하면 프로필, 즐겨찾기 공고, 자소서, 매칭 캐시, 평가·인터뷰·시뮬레이션 기록이 모두 삭제됩니다.",
+                    "Deleting your account removes your profile, saved job postings, cover letters, matching cache, and all evaluation, interview, and simulation records.",
                   )}
                 </p>
                 <button
@@ -381,25 +370,12 @@ export default function SettingsPage() {
                 <div className="signal-fill" style={{ width: `${completion}%` }} />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {skillChips.length ? skillChips.map((skill) => <span key={skill} className="chip">{skill}</span>) : <span className="text-sm text-[var(--muted)]">{t("스킬을 입력하면 여기에 표시됩니다.", "Skills appear here after you add them.")}</span>}
+                {skillChips.length ? skillChips.map((skill) => <span key={skill} className="chip">{skill}</span>) : <span className="text-sm text-[var(--muted)]">{t("저장 후 여기에 표시됩니다.", "Skills appear here after you save.")}</span>}
               </div>
             </PagePanel>
 
             <PagePanel>
-              <SectionTitle title={t("최근 공고 알림", "Recent Job Alerts")} description={t("희망 기업을 저장하면 관련 공고를 확인할 수 있습니다.", "Save desired companies to see related alerts.")} />
-              {alerts.length ? (
-                <div className="mt-4 grid gap-2">
-                  {alerts.slice(0, 4).map((alert) => (
-                    <a key={alert.id} href={alert.url} target="_blank" rel="noreferrer" className="content-card clickable-card block p-3 text-sm">
-                      <p className="font-medium text-[var(--foreground)]">{alert.company}</p>
-                      <p className="text-[var(--muted-strong)]">{alert.title}</p>
-                      <p className="text-xs text-[var(--muted)]">{alert.postedAt}</p>
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState>{t("아직 알림이 없습니다.", "No alerts yet.")}</EmptyState>
-              )}
+              <JobFavoritesPanel language={language} />
             </PagePanel>
           </div>
 

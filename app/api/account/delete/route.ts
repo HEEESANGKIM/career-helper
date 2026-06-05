@@ -57,6 +57,7 @@ const USER_DATA_TABLES = [
   "career_simulations",
   "career_readiness_snapshots",
   "real_job_search_cache",
+  "job_favorites",
   "cover_letters",
   "user_profiles",
   "profiles",

@@ -138,7 +138,7 @@ export const careerThemes: CareerTheme[] = [
     recommendedGoal: "Ship a portfolio product and land a technical internship.",
     recommendedGoalKo: "포트폴리오 제품을 출시하고 기술 인턴십을 노리세요.",
     visualIcon: Code2,
-    accentClass: "from-cyan-400/35 via-blue-500/20 to-slate-950",
+    accentClass: "from-cyan-400/30 via-blue-500/15 to-[var(--surface-strong)]",
   },
   {
     id: "creative",
@@ -152,7 +152,7 @@ export const careerThemes: CareerTheme[] = [
     recommendedGoal: "Build a standout public portfolio and win client-style projects.",
     recommendedGoalKo: "눈에 띄는 공개 포트폴리오를 만들고 클라이언트형 프로젝트를 확보하세요.",
     visualIcon: Palette,
-    accentClass: "from-pink-400/35 via-purple-500/20 to-slate-950",
+    accentClass: "from-pink-400/30 via-purple-500/15 to-[var(--surface-strong)]",
   },
   {
     id: "analyst",
@@ -166,7 +166,7 @@ export const careerThemes: CareerTheme[] = [
     recommendedGoal: "Turn data projects into decision memos and recruiting proof.",
     recommendedGoalKo: "데이터 프로젝트를 의사결정 메모와 채용 증거로 바꾸세요.",
     visualIcon: BarChart3,
-    accentClass: "from-emerald-400/35 via-green-500/20 to-slate-950",
+    accentClass: "from-emerald-400/30 via-green-500/15 to-[var(--surface-strong)]",
   },
   {
     id: "researcher",
@@ -180,7 +180,7 @@ export const careerThemes: CareerTheme[] = [
     recommendedGoal: "Build research credibility and secure a lab or graduate pathway.",
     recommendedGoalKo: "연구 신뢰도를 쌓고 연구실 또는 대학원 경로를 확보하세요.",
     visualIcon: FlaskConical,
-    accentClass: "from-violet-400/35 via-indigo-500/20 to-slate-950",
+    accentClass: "from-violet-400/30 via-indigo-500/15 to-[var(--surface-strong)]",
   },
   {
     id: "global-explorer",
@@ -194,7 +194,7 @@ export const careerThemes: CareerTheme[] = [
     recommendedGoal: "Prepare a global-ready profile and target international openings.",
     recommendedGoalKo: "글로벌 지원용 프로필을 준비하고 해외 공고를 공략하세요.",
     visualIcon: Compass,
-    accentClass: "from-amber-400/35 via-orange-500/20 to-slate-950",
+    accentClass: "from-amber-400/30 via-orange-500/15 to-[var(--surface-strong)]",
   },
 ];
 

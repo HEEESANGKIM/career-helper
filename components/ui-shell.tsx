@@ -25,7 +25,9 @@ export function PageShell({ children, maxWidth = "max-w-7xl", center = false }: 
   return (
     <main className="app-bg px-4 py-7 sm:px-6 lg:px-8">
       <div className="cockpit-shell mx-auto w-full max-w-[1560px]">
-        <CockpitRail />
+        <div className="cockpit-rail-slot">
+          <CockpitRail />
+        </div>
         <div className={`min-w-0 ${maxWidth}`}>
           {children}
         </div>

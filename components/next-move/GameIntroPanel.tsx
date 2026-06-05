@@ -37,18 +37,18 @@ const introCopy = {
 export function GameIntroPanel({ language, onStart, onSample }: GameIntroPanelProps) {
   const copy = introCopy[language];
   return (
-    <section className="relative overflow-hidden rounded-[30px] border border-white/12 bg-[radial-gradient(circle_at_18%_10%,rgba(6,182,212,0.22),transparent_32%),radial-gradient(circle_at_78%_0%,rgba(124,58,237,0.24),transparent_34%),linear-gradient(145deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)] sm:p-8 lg:p-10">
+    <section className="next-move-hero p-6 sm:p-8 lg:p-10">
       <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,var(--accent-2),transparent)]" />
       <div className="grid min-h-[620px] gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div>
-          <p className="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-cyan-100">{copy.mode}</p>
-          <h1 className="mt-6 max-w-4xl text-5xl font-black leading-none text-white sm:text-6xl lg:text-7xl">
+          <p className="next-move-kicker">{copy.mode}</p>
+          <h1 className="gradient-title mt-6 max-w-4xl text-5xl font-black leading-none sm:text-6xl lg:text-7xl">
             Next Move
           </h1>
-          <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-slate-200">
+          <p className="mt-6 max-w-2xl text-lg font-semibold leading-8 text-[var(--muted-strong)]">
             {copy.subtitle}
           </p>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-400">
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-[var(--muted)]">
             {copy.body}
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -64,10 +64,10 @@ export function GameIntroPanel({ language, onStart, onSample }: GameIntroPanelPr
         </div>
         <div className="grid gap-4">
           {copy.cards.map(([title, body]) => (
-            <div key={title} className="rounded-[24px] border border-cyan-300/20 bg-slate-950/58 p-5 shadow-xl">
+            <div key={title} className="next-move-inner-card p-5">
               <Sparkles className="text-[var(--accent-2)]" size={18} aria-hidden="true" />
-              <p className="mt-4 text-xl font-black text-white">{title}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-400">{body}</p>
+              <p className="mt-4 text-xl font-black text-[var(--foreground)]">{title}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{body}</p>
             </div>
           ))}
         </div>

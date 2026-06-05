@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { clampScore, cleanText, getUserIdFromRequest, openai, parseJsonObject, saveEvaluation, saveFeatureRecord } from "@/lib/evaluation-server";
+import { parseProfileSkills, parseSkillList } from "@/lib/skill-list";
 
 export const runtime = "nodejs";
 
@@ -31,20 +32,12 @@ function parseLanguage(value: unknown): LanguageMode {
   return String(value ?? "").toLowerCase() === "en" ? "en" : "ko";
 }
 
-function splitTerms(...values: Array<string | null | undefined>) {
-  return values
-    .join(",")
-    .split(/[,/|•\n]/)
-    .map((item) => cleanText(item, 80))
-    .filter(Boolean);
-}
-
 function fallback(profile: ProfileRow | null, language: LanguageMode) {
-  const skills = splitTerms(profile?.core_skills, profile?.tech_stack, profile?.skills);
+  const skills = parseProfileSkills(profile);
   const projects = Number(profile?.project_count ?? 0);
   const internships = Number(profile?.internship_count ?? 0);
   const targetRole = cleanText(profile?.target_role, 80) || (language === "en" ? "Software Engineering Intern" : "소프트웨어 엔지니어링 인턴");
-  const targetCompany = splitTerms(profile?.desired_companies)[0] || "Nvidia";
+  const targetCompany = parseSkillList(profile?.desired_companies)[0] || "Nvidia";
   const resumeScore = clampScore(52 + skills.length * 3 + projects * 5 + internships * 4, 76);
   const interviewScore = clampScore(48 + (profile?.experience_summary ? 12 : 0) + internships * 5, 70);
   const portfolioMove = projects < 2 || !profile?.portfolio_url;

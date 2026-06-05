@@ -1,6 +1,5 @@
 ﻿import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import "./globals.css";
 import AuthControls from "@/components/auth-controls";
 import ThemeToggle from "@/components/theme-toggle";
@@ -26,7 +25,7 @@ const themeInitScript = `
 })();
 `;
 
-const logoVersion = "2026-04-26-1524";
+const logoVersion = "2026-06-01-single";
 
 export default function RootLayout({
   children,
@@ -41,19 +40,17 @@ export default function RootLayout({
       <body className="antialiased">
         <LanguageProvider>
           <header className="top-nav">
-            <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:flex-nowrap sm:px-6 lg:px-8">
-              <Link href="/" aria-label="PathMate Home" className="inline-flex h-10 items-center overflow-visible sm:h-11">
-                <Image
+            <div className="top-nav__bar mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+              <Link href="/" aria-label="PathMate Home" className="top-nav-logo">
+                <img
                   src={`/logo.png?v=${logoVersion}`}
-                  alt="PathMate"
+                  alt=""
                   width={1536}
                   height={1024}
-                  className="-my-5 h-20 w-auto max-w-none object-contain sm:-my-6 sm:h-24"
-                  priority
-                  unoptimized
+                  decoding="async"
                 />
               </Link>
-              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap">
+              <div className="top-nav-actions w-full sm:w-auto">
                 <LanguageToggle />
                 <ThemeToggle />
                 <AuthControls variant="top" />
@@ -66,5 +63,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-

@@ -1,4 +1,4 @@
-# PathMate.ai
+# Pathmate.ai
 
 An AI-powered career cockpit for students and job seekers. PathMate helps users build a structured profile, practice the hiring loop, compare career paths, and discover realistic job matches.
 
@@ -12,7 +12,7 @@ An AI-powered career cockpit for students and job seekers. PathMate helps users 
 
 **The problem:** Candidates often struggle to tell which roles realistically fit their background (GPA, projects, internships, skills) and how to improve applications for those roles.
 
-**Our solution:** PathMate turns profile data into AI-ready context, then delivers dashboard insights, resume support, hiring simulations, career planning, and live job matching in one web app.
+**Our solution:** Pathmate turns profile data into AI-ready context, then delivers dashboard insights, resume support, hiring simulations, career planning, and live job matching in one web app.
 
 ---
 

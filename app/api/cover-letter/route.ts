@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { languageName, parseLanguage } from "@/lib/evaluation-server";
+import { validateCoverLetterInput } from "@/lib/cover-letter-validation";
 
 export const runtime = "nodejs";
 
@@ -87,6 +88,17 @@ export async function POST(request: NextRequest) {
 
   if (!resumeText) {
     return NextResponse.json({ error: "resumeText is required." }, { status: 400 });
+  }
+
+  const validation = validateCoverLetterInput(resumeText, jobDescription, language);
+  if (!validation.valid) {
+    return NextResponse.json(
+      {
+        error: isEn ? "Fix the highlighted fields before generating." : "생성하기 전에 입력 내용을 수정해 주세요.",
+        fieldErrors: validation.errors,
+      },
+      { status: 400 },
+    );
   }
 
   const { data: profile } = await serviceClient

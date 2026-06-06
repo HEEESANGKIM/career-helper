@@ -8,6 +8,7 @@ export type LanguageMode = "ko" | "en";
 type LanguageContextValue = {
   language: LanguageMode;
   setLanguage: (language: LanguageMode) => void;
+  languageReady: boolean;
 };
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -23,13 +24,27 @@ const detectLanguage = (): LanguageMode => {
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguage] = useState<LanguageMode>(detectLanguage);
+  const [languageReady, setLanguageReady] = useState(false);
 
   useEffect(() => {
     const loadProfileLanguage = async () => {
-      if (!supabase || !isSupabaseConfigured) return;
+      const saved = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
+      if (saved === "ko" || saved === "en") {
+        setLanguageReady(true);
+        return;
+      }
+
+      if (!supabase || !isSupabaseConfigured) {
+        setLanguageReady(true);
+        return;
+      }
+
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user.id;
-      if (!userId) return;
+      if (!userId) {
+        setLanguageReady(true);
+        return;
+      }
 
       const { data } = await supabase
         .from("user_profiles")
@@ -40,6 +55,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       if (data?.preferred_language === "ko" || data?.preferred_language === "en") {
         setLanguage(data.preferred_language);
       }
+      setLanguageReady(true);
     };
 
     void loadProfileLanguage();
@@ -68,7 +84,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     void saveProfileLanguage();
   }, [language]);
 
-  const value = useMemo(() => ({ language, setLanguage }), [language]);
+  const value = useMemo(() => ({ language, setLanguage, languageReady }), [language, languageReady]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 

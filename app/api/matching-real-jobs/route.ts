@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { languageName, parseLanguageFromRequest, type LanguageMode } from "@/lib/evaluation-server";
+import { hasMinimumProfileForMatching, minimumProfileMatchingMessage } from "@/lib/profile-validation";
 
 export const runtime = "nodejs";
 
@@ -857,7 +858,7 @@ export async function GET(request: NextRequest) {
   const { data: profile } = await serviceClient
     .from("profiles")
     .select(
-      "target_role, preferred_location, core_skills, tech_stack, major, education_level, role_certifications, language_test_name, language_test_score",
+      "full_name, school_name, school_type, education_level, major, graduation_status, graduation_date, gpa_score, gpa_scale, internship_count, project_count, target_role, target_industry, preferred_location, core_skills, tech_stack, role_certifications, language_test_name, language_test_score",
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -871,6 +872,10 @@ export async function GET(request: NextRequest) {
 
   const typedProfile = (profile ?? null) as ProfileRow | null;
   const typedCoverLetters = (coverLetters ?? []) as CoverLetterRow[];
+
+  if (!hasMinimumProfileForMatching(typedProfile)) {
+    return NextResponse.json({ error: minimumProfileMatchingMessage(language) }, { status: 422 });
+  }
 
   const cacheUpdatedAt = cached?.updated_at ?? cached?.created_at;
   const cacheTime = cacheUpdatedAt ? new Date(cacheUpdatedAt).getTime() : 0;

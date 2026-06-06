@@ -4,6 +4,9 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLanguage } from "@/components/language-provider";
+import { useProfileGate } from "@/components/profile-gate-provider";
+import { ProfileRouteGuard } from "@/components/profile-route-guard";
+import { isProfileGatedPath, PROFILE_GATE_SETTINGS_PATH, profileGateMessage } from "@/lib/profile-gate-paths";
 
 type PageShellProps = {
   children: ReactNode;
@@ -24,6 +27,7 @@ export function PageShell({ children, maxWidth = "max-w-7xl", center = false }: 
 
   return (
     <main className="app-bg px-4 py-7 sm:px-6 lg:px-8">
+      <ProfileRouteGuard />
       <div className="cockpit-shell mx-auto w-full max-w-[1560px]">
         <div className="cockpit-rail-slot">
           <CockpitRail />
@@ -143,7 +147,10 @@ const navSteps = [
 function CockpitRail() {
   const pathname = usePathname();
   const { language } = useLanguage();
+  const { loading, isLoggedIn, profileComplete } = useProfileGate();
   const isKo = language === "ko";
+  const gateMessage = profileGateMessage(language);
+  const gateActive = isLoggedIn && !loading && !profileComplete;
 
   return (
     <aside className="cockpit-rail" aria-label="PathMate cockpit status">
@@ -173,8 +180,16 @@ function CockpitRail() {
             pathname.startsWith(`${step.href}/`) ||
             (step.href === "/settings" && pathname.startsWith("/my-info")) ||
             (step.href === "/next-move" && pathname.startsWith("/career-chess"));
+          const isBlocked = gateActive && isProfileGatedPath(step.href);
+          const href = isBlocked ? PROFILE_GATE_SETTINGS_PATH : step.href;
           return (
-            <Link key={step.href} href={step.href} className={`cockpit-nav-item${isActive ? " cockpit-nav-item--active" : ""}`}>
+            <Link
+              key={step.href}
+              href={href}
+              title={isBlocked ? gateMessage : undefined}
+              aria-disabled={isBlocked}
+              className={`cockpit-nav-item${isActive ? " cockpit-nav-item--active" : ""}${isBlocked ? " opacity-55" : ""}`}
+            >
               <span className="cockpit-nav-icon">{step.icon}</span>
               <span className="cockpit-nav-label">{isKo ? step.labelKo : step.labelEn}</span>
               {isActive && <span className="cockpit-nav-dot" aria-hidden="true" />}

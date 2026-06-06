@@ -1102,6 +1102,71 @@ textarea.field {
   color: var(--foreground);
 }
 
+.segment-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, var(--field-highlight), transparent),
+    var(--field-bg);
+  box-shadow: inset 0 1px 0 var(--field-highlight);
+}
+
+.segment-select--error {
+  border-color: color-mix(in srgb, var(--warning) 72%, var(--line));
+}
+
+.segment-select__option {
+  flex: 1 1 0;
+  min-width: min(100%, 5.5rem);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted);
+  padding: 11px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  white-space: pre-line;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.segment-select__option:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+}
+
+.segment-select__option--active {
+  color: var(--foreground);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 10%, transparent), color-mix(in srgb, var(--accent-2) 6%, transparent)),
+    color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent),
+    0 6px 18px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.segment-select__option:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-2) 45%, transparent);
+  outline-offset: 1px;
+}
+
+[data-theme="light"] .segment-select__option--active {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 8%, transparent), color-mix(in srgb, var(--accent-2) 5%, transparent)),
+    #ffffff;
+}
+
 [data-theme="light"] .field,
 [data-theme="light"] .field:focus {
   color-scheme: light;

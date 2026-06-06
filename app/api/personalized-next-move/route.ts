@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { clampScore, cleanText, getUserIdFromRequest, openai, parseJsonObject, saveEvaluation, saveFeatureRecord } from "@/lib/evaluation-server";
+import { hasPortfolioLinks } from "@/lib/portfolio-links";
 import { parseProfileSkills, parseSkillList } from "@/lib/skill-list";
 
 export const runtime = "nodejs";
@@ -21,7 +22,6 @@ type ProfileRow = {
   skills?: string | null;
   desired_companies?: string | null;
   portfolio_url?: string | null;
-  github_url?: string | null;
   experience_summary?: string | null;
   internship_count?: number | null;
   project_count?: number | null;
@@ -40,7 +40,7 @@ function fallback(profile: ProfileRow | null, language: LanguageMode) {
   const targetCompany = parseSkillList(profile?.desired_companies)[0] || "Nvidia";
   const resumeScore = clampScore(52 + skills.length * 3 + projects * 5 + internships * 4, 76);
   const interviewScore = clampScore(48 + (profile?.experience_summary ? 12 : 0) + internships * 5, 70);
-  const portfolioMove = projects < 2 || !profile?.portfolio_url;
+  const portfolioMove = projects < 2 || !hasPortfolioLinks(profile?.portfolio_url);
   const recommendedId = portfolioMove ? "portfolio" : interviewScore < 75 ? "interview" : "apply";
 
   const moveCandidates = [
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await serviceClient
     .from("profiles")
-    .select("school_name, major, gpa_score, gpa, core_skills, tech_stack, skills, desired_companies, portfolio_url, github_url, experience_summary, internship_count, project_count, target_role")
+    .select("school_name, major, gpa_score, gpa, core_skills, tech_stack, skills, desired_companies, portfolio_url, experience_summary, internship_count, project_count, target_role")
     .eq("user_id", userId)
     .maybeSingle<ProfileRow>();
   const base = fallback(profile ?? null, language) as NextMoveResult;

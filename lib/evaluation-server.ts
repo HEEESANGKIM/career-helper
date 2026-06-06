@@ -40,6 +40,16 @@ export const clampScore = (value: unknown, fallback = 50) => {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 };
 
+/** AI often returns 0–1 decimals for probabilities; normalize to 0–100 integer percent. */
+export const normalizeProbabilityPercent = (value: unknown) => {
+  if (value == null || value === "") return null;
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const scaled =
+    numeric > 0 && (numeric < 1 || (!Number.isInteger(numeric) && numeric <= 1)) ? numeric * 100 : numeric;
+  return Math.max(0, Math.min(100, Math.round(scaled)));
+};
+
 export const safeList = (value: unknown, fallback: string[], max = 6) => {
   if (!Array.isArray(value)) return fallback;
   const items = value.map((item) => cleanText(item, 300)).filter(Boolean).slice(0, max);

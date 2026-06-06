@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLanguage } from "@/components/language-provider";
+import { useProfileGate } from "@/components/profile-gate-provider";
+import { isProfileGatedPath, PROFILE_GATE_SETTINGS_PATH, profileGateMessage } from "@/lib/profile-gate-paths";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type Variant = "top" | "menu";
@@ -20,7 +22,10 @@ const appNav = [
 export default function AuthControls({ variant = "top" }: { variant?: Variant }) {
   const pathname = usePathname();
   const { language } = useLanguage();
+  const { loading: gateLoading, isLoggedIn: gateLoggedIn, profileComplete } = useProfileGate();
   const isKo = language === "ko";
+  const gateMessage = profileGateMessage(language);
+  const gateActive = gateLoggedIn && !gateLoading && !profileComplete;
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -66,11 +71,15 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
   if (variant === "menu") {
     return isLoggedIn ? (
       <>
-        {navLinks.map((item) => (
-          <Link key={item.href} className={`flex w-full items-center justify-start px-3 py-2 text-left text-sm ${item.active ? "accent-pill" : "secondary-btn"}`} href={item.href}>
+        {navLinks.map((item) => {
+          const isBlocked = gateActive && isProfileGatedPath(item.href);
+          const href = isBlocked ? PROFILE_GATE_SETTINGS_PATH : item.href;
+          return (
+          <Link key={item.href} className={`flex w-full items-center justify-start px-3 py-2 text-left text-sm ${item.active ? "accent-pill" : "secondary-btn"}${isBlocked ? " opacity-55" : ""}`} href={href} title={isBlocked ? gateMessage : undefined}>
             {item.label}
           </Link>
-        ))}
+          );
+        })}
         <button onClick={handleLogout} className="secondary-btn flex w-full items-center justify-start px-3 py-2 text-left text-sm">
           {isKo ? "로그아웃" : "Log out"}
         </button>
@@ -93,37 +102,47 @@ export default function AuthControls({ variant = "top" }: { variant?: Variant })
         aria-label="App navigation"
         className="order-last flex w-full items-center gap-1 overflow-x-auto rounded-full border border-[var(--line)] bg-[var(--surface)] p-1 shadow-[0_16px_45px_rgba(0,0,0,0.18)] backdrop-blur-xl lg:hidden"
       >
-        {navLinks.map((item) => (
+        {navLinks.map((item) => {
+          const isBlocked = gateActive && isProfileGatedPath(item.href);
+          const href = isBlocked ? PROFILE_GATE_SETTINGS_PATH : item.href;
+          return (
           <Link
             key={item.href}
-            href={item.href}
+            href={href}
+            title={isBlocked ? gateMessage : undefined}
             className={`shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition ${
               item.active
                 ? "bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-white shadow-[0_10px_26px_rgba(124,58,237,0.28)]"
                 : "text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--foreground)]"
-            }`}
+            }${isBlocked ? " opacity-55" : ""}`}
           >
             {item.label}
           </Link>
-        ))}
+          );
+        })}
       </nav>
       <nav
         aria-label="App navigation"
         className="hidden items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface)] p-1 shadow-[0_16px_45px_rgba(0,0,0,0.18)] backdrop-blur-xl lg:flex"
       >
-        {navLinks.map((item) => (
+        {navLinks.map((item) => {
+          const isBlocked = gateActive && isProfileGatedPath(item.href);
+          const href = isBlocked ? PROFILE_GATE_SETTINGS_PATH : item.href;
+          return (
           <Link
             key={item.href}
-            href={item.href}
+            href={href}
+            title={isBlocked ? gateMessage : undefined}
             className={`rounded-full px-3.5 py-2 text-xs font-medium transition ${
               item.active
                 ? "bg-[linear-gradient(135deg,var(--accent),var(--accent-2))] text-white shadow-[0_10px_26px_rgba(124,58,237,0.28)]"
                 : "text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--foreground)]"
-            }`}
+            }${isBlocked ? " opacity-55" : ""}`}
           >
             {item.label}
           </Link>
-        ))}
+          );
+        })}
       </nav>
       <button onClick={handleLogout} className="secondary-btn px-3 py-2 text-xs">
         {isKo ? "로그아웃" : "Log out"}

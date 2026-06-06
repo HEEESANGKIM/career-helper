@@ -1,3 +1,4 @@
+import { hasPortfolioLinks } from "@/lib/portfolio-links";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { calculateSkillMatch, careerDataCopy, findCareerTemplate, localizeTemplate, type LanguageMode } from "@/lib/career-data";
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
     .filter((item) => ["interview", "hiring-manager"].includes(String(item.feature_type)))
     .map((item) => clampScore(item.overall_score, Number((item.output_json as { overallScore?: number })?.overallScore ?? 50)));
   const interviewScore = average(interviewScores) ?? 45;
-  const portfolioScore = clampScore((profile?.project_count ?? 0) * 18 + (profile?.portfolio_url ? 35 : 20), 45);
+  const portfolioScore = clampScore((profile?.project_count ?? 0) * 18 + (hasPortfolioLinks(profile?.portfolio_url) ? 35 : 20), 45);
   const marketAlignment = clampScore(60 + (localized.salaryBand.entry ? 10 : 0) + Math.min(10, (profile?.internship_count ?? 0) * 4), 65);
   const backgroundEvaluation = (evaluations ?? []).find((item) => item.feature_type === "background-check");
   const backgroundScore = clampScore(backgroundEvaluation?.overall_score, 75);

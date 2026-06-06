@@ -3,6 +3,13 @@
 import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, Sparkles } from "lucide-react";
+import { SegmentSelectField } from "@/components/settings-profile-fields";
+import { validateInterviewAnswer } from "@/lib/interview-answer-validation";
+import {
+  hiringSimulatorFieldLabel,
+  validateHiringSimulatorSetup,
+  type HiringSimulatorField,
+} from "@/lib/hiring-simulator-validation";
 import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
 import { useLanguage } from "@/components/language-provider";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -40,14 +47,18 @@ type HiringSimulatorData = typeof emptySimulationData & {
 };
 
 type AnalysisResult = {
-  overallScore: number;
-  passProbability: number;
+  overallScore: number | null;
+  passProbability: number | null;
   strengths: string[];
   weaknesses: string[];
   recommendations: string[];
-  nextPracticeQuestion: string;
-  source?: "openai" | "demo_fallback";
+  source: "openai" | "analysis_unavailable" | "answer_rejected";
   evaluationId?: string | null;
+};
+
+type AnalyzeNotice = {
+  source: "answer_rejected" | "analysis_unavailable";
+  message: string;
 };
 
 const feedbackLabels: FeedbackKey[] = ["clarity", "specificity", "relevance", "structure", "confidence"];
@@ -65,6 +76,12 @@ function copy(isEn: boolean) {
     targetRole: isEn ? "Target Role" : "목표 직무",
     targetCompany: isEn ? "Target Company" : "목표 회사",
     experienceLevel: isEn ? "Experience Level" : "경력 수준",
+    experienceOptions: [
+      { value: "Internship / New Grad", label: isEn ? "Intern\nNew Grad" : "인턴\n신입" },
+      { value: "Entry Level", label: isEn ? "Entry Level" : "주니어" },
+      { value: "Career Switcher", label: isEn ? "Career Switcher" : "경력 전환" },
+      { value: "Mid Level", label: isEn ? "Mid Level" : "미드 레벨" },
+    ],
     jobDescription: isEn ? "Job Description Input" : "공고 내용 입력",
     rolePlaceholder: isEn ? "EX) Software Engineering Intern" : "EX) 소프트웨어 엔지니어링 인턴",
     companyPlaceholder: isEn ? "EX) Nvidia" : "EX) 토스",
@@ -96,11 +113,21 @@ function copy(isEn: boolean) {
     strengths: isEn ? "Strengths" : "강점",
     weaknesses: isEn ? "Areas to improve" : "보완할 점",
     recommendations: isEn ? "Recommendations" : "추천 액션",
-    nextQuestion: isEn ? "Next practice question" : "다음 연습 질문",
+    strengthsEmpty: isEn ? "No strengths were found in this answer." : "이 답변에서 확인된 강점이 없습니다.",
+    weaknessesEmpty: isEn ? "No specific gaps were listed." : "구체적인 보완 항목이 없습니다.",
+    recommendationsEmpty: isEn ? "No recommendations were generated." : "추천 액션이 생성되지 않았습니다.",
+    analysisReady: isEn ? "AI analyzed your answer using the question and what you wrote." : "질문과 작성한 답변을 바탕으로 AI가 분석했습니다.",
+    answerScore: isEn ? "Answer score" : "답변 점수",
+    analysisUnavailable: isEn ? "AI analysis is unavailable. Try again in a moment." : "AI 분석을 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+    answerRejected: isEn ? "This answer could not be analyzed." : "이 답변은 분석할 수 없습니다.",
     saved: isEn ? "Evaluation saved" : "평가 저장됨",
     analyzeError: isEn ? "Could not analyze the answer." : "답변 분석에 실패했습니다.",
     personalizeError: isEn ? "Could not run the simulation." : "시뮬레이션을 실행하지 못했습니다.",
     setupRequired: isEn ? "Enter target role, company, and job description before starting." : "시뮬레이션 시작 전에 목표 직무, 회사, 공고 내용을 입력하세요.",
+    setupFixFields: (count: number) =>
+      isEn
+        ? `Fix ${count} field${count === 1 ? "" : "s"} before starting the simulation.`
+        : `시뮬레이션 시작 전에 ${count}개 항목을 수정해 주세요.`,
     simulationReady: isEn ? "Simulation generated from your target and profile." : "입력한 타깃과 프로필 기준으로 시뮬레이션이 생성되었습니다.",
     feedbackLabels: isEn ? { clarity: "Clarity", specificity: "Specificity", relevance: "Relevance", structure: "Structure", confidence: "Confidence" } : { clarity: "명확성", specificity: "구체성", relevance: "관련성", structure: "구조", confidence: "자신감" },
   };
@@ -155,14 +182,34 @@ export default function HiringSimulatorPage() {
   const [selectedQuestion, setSelectedQuestion] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState("");
+  const [analyzeNotice, setAnalyzeNotice] = useState<AnalyzeNotice | null>(null);
   const [simulationError, setSimulationError] = useState("");
+  const [setupFieldErrors, setSetupFieldErrors] = useState<Partial<Record<HiringSimulatorField, string>>>({});
+  const [setupSubmitAttempted, setSetupSubmitAttempted] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
 
   const canStartSimulation = Boolean(targetRole.trim() && targetCompany.trim() && jobDescription.trim());
+  const hasSetupFieldErrors = Object.keys(setupFieldErrors).length > 0;
+
+  const clearSetupFieldError = (field: HiringSimulatorField) => {
+    setSetupFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
 
   const runSimulation = useCallback(async () => {
+    setSetupSubmitAttempted(true);
+    const validation = validateHiringSimulatorSetup(targetRole, targetCompany, jobDescription, language);
+    if (!validation.valid) {
+      setSetupFieldErrors(validation.errors);
+      setSimulationError(t.setupFixFields(Object.keys(validation.errors).length));
+      return;
+    }
+
     if (!canStartSimulation) {
       setSimulationError(t.setupRequired);
       return;
@@ -170,6 +217,7 @@ export default function HiringSimulatorPage() {
 
     setPersonalizing(true);
     setSimulationError("");
+    setSetupFieldErrors({});
     try {
       const response = await fetch("/api/personalized-hiring-simulator", {
         method: "POST",
@@ -183,7 +231,14 @@ export default function HiringSimulatorPage() {
         }),
       });
       const personalized = await response.json();
-      if (!response.ok) throw new Error(personalized?.error ?? t.personalizeError);
+      if (!response.ok) {
+        const apiFieldErrors = personalized.fieldErrors as Partial<Record<HiringSimulatorField, string>> | undefined;
+        if (apiFieldErrors && Object.keys(apiFieldErrors).length > 0) {
+          setSetupFieldErrors(apiFieldErrors);
+          setSetupSubmitAttempted(true);
+        }
+        throw new Error(personalized?.error ?? t.personalizeError);
+      }
 
       const next: HiringSimulatorData = {
         ...emptySimulationData,
@@ -212,13 +267,21 @@ export default function HiringSimulatorPage() {
     } finally {
       setPersonalizing(false);
     }
-  }, [canStartSimulation, experienceLevel, jobDescription, language, t.personalizeError, t.setupRequired, targetCompany, targetRole]);
+  }, [canStartSimulation, experienceLevel, jobDescription, language, t.personalizeError, t.setupFixFields, t.setupRequired, targetCompany, targetRole]);
 
   const analyzeAnswer = async () => {
     if (!selectedQuestion || answer.trim().length < 40) return;
 
+    const answerValidationError = validateInterviewAnswer(answer, language);
+    if (answerValidationError) {
+      setAnalyzeNotice({ source: "answer_rejected", message: answerValidationError });
+      setHasAnalyzed(false);
+      setAnalysisResult(null);
+      return;
+    }
+
     setAnalyzing(true);
-    setAnalyzeError("");
+    setAnalyzeNotice(null);
     try {
       const response = await fetch("/api/evaluate/hiring-manager", {
         method: "POST",
@@ -234,18 +297,33 @@ export default function HiringSimulatorPage() {
         }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result?.error ?? t.analyzeError);
 
-      const mappedFeedback = mapCategoryToFeedback(result.categoryScores);
-      setAnswerFeedback(mappedFeedback);
+      if (!response.ok || result.source !== "openai") {
+        setHasAnalyzed(false);
+        setAnalysisResult(null);
+        const source = result?.source === "answer_rejected" ? "answer_rejected" : "analysis_unavailable";
+        const message =
+          result?.error ??
+          (source === "answer_rejected" ? t.answerRejected : t.analysisUnavailable);
+        setAnalyzeNotice({ source, message });
+        return;
+      }
+
+      if (!result.categoryScores || result.overallScore == null || result.passProbability == null) {
+        setHasAnalyzed(false);
+        setAnalysisResult(null);
+        setAnalyzeNotice({ source: "analysis_unavailable", message: t.analysisUnavailable });
+        return;
+      }
+
+      setAnswerFeedback(mapCategoryToFeedback(result.categoryScores));
       setAnalysisResult({
         overallScore: result.overallScore,
         passProbability: result.passProbability,
         strengths: result.strengths ?? [],
         weaknesses: result.weaknesses ?? [],
         recommendations: result.recommendations ?? [],
-        nextPracticeQuestion: result.nextPracticeQuestion ?? "",
-        source: result.source,
+        source: "openai",
         evaluationId: result.evaluationId,
       });
       setHasAnalyzed(true);
@@ -253,8 +331,10 @@ export default function HiringSimulatorPage() {
         ...prev,
         interviewScore: result.overallScore,
       }));
-    } catch (error) {
-      setAnalyzeError(error instanceof Error ? error.message : t.analyzeError);
+    } catch {
+      setHasAnalyzed(false);
+      setAnalysisResult(null);
+      setAnalyzeNotice({ source: "analysis_unavailable", message: t.analysisUnavailable });
     } finally {
       setAnalyzing(false);
     }
@@ -281,7 +361,7 @@ export default function HiringSimulatorPage() {
             <button
               type="button"
               onClick={() => void runSimulation()}
-              disabled={personalizing || !canStartSimulation}
+              disabled={personalizing || !canStartSimulation || (setupSubmitAttempted && hasSetupFieldErrors)}
               className="primary-btn inline-flex items-center gap-2 px-4 py-2 text-sm disabled:opacity-60"
             >
               <RefreshCw size={16} aria-hidden="true" />
@@ -291,27 +371,76 @@ export default function HiringSimulatorPage() {
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label>
               <span className="form-label">{t.targetRole}</span>
-              <input className="field" value={targetRole} onChange={(event) => setTargetRole(event.target.value)} placeholder={t.rolePlaceholder} />
+              <input
+                className={`field${setupFieldErrors.targetRole ? " border-[var(--warning)]" : ""}`}
+                value={targetRole}
+                onChange={(event) => {
+                  setTargetRole(event.target.value);
+                  clearSetupFieldError("targetRole");
+                }}
+                aria-invalid={Boolean(setupFieldErrors.targetRole)}
+                placeholder={t.rolePlaceholder}
+              />
+              {setupFieldErrors.targetRole ? (
+                <span className="mt-1 block text-xs text-[var(--warning)]">{setupFieldErrors.targetRole}</span>
+              ) : null}
             </label>
             <label>
               <span className="form-label">{t.targetCompany}</span>
-              <input className="field" value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} placeholder={t.companyPlaceholder} />
+              <input
+                className={`field${setupFieldErrors.targetCompany ? " border-[var(--warning)]" : ""}`}
+                value={targetCompany}
+                onChange={(event) => {
+                  setTargetCompany(event.target.value);
+                  clearSetupFieldError("targetCompany");
+                }}
+                aria-invalid={Boolean(setupFieldErrors.targetCompany)}
+                placeholder={t.companyPlaceholder}
+              />
+              {setupFieldErrors.targetCompany ? (
+                <span className="mt-1 block text-xs text-[var(--warning)]">{setupFieldErrors.targetCompany}</span>
+              ) : null}
             </label>
-            <label className="sm:col-span-2">
-              <span className="form-label">{t.experienceLevel}</span>
-              <select className="field" value={experienceLevel} onChange={(event) => setExperienceLevel(event.target.value)}>
-                <option>Internship / New Grad</option>
-                <option>Entry Level</option>
-                <option>Career Switcher</option>
-                <option>Mid Level</option>
-              </select>
-            </label>
+            <div className="sm:col-span-2">
+              <SegmentSelectField
+                label={t.experienceLevel}
+                name="hiring-simulator-experience-level"
+                value={experienceLevel}
+                options={t.experienceOptions}
+                onChange={setExperienceLevel}
+              />
+            </div>
             <label className="sm:col-span-2">
               <span className="form-label">{t.jobDescription}</span>
-              <textarea className="field min-h-36" value={jobDescription} onChange={(event) => setJobDescription(event.target.value)} placeholder={t.jdPlaceholder} />
+              <textarea
+                className={`field min-h-36${setupFieldErrors.jobDescription ? " border-[var(--warning)]" : ""}`}
+                value={jobDescription}
+                onChange={(event) => {
+                  setJobDescription(event.target.value);
+                  clearSetupFieldError("jobDescription");
+                }}
+                aria-invalid={Boolean(setupFieldErrors.jobDescription)}
+                placeholder={t.jdPlaceholder}
+              />
+              {setupFieldErrors.jobDescription ? (
+                <span className="mt-1 block text-xs text-[var(--warning)]">{setupFieldErrors.jobDescription}</span>
+              ) : null}
             </label>
           </div>
-          {simulationError ? <Notice tone="warning" className="mt-4">{simulationError}</Notice> : null}
+          {simulationError ? (
+            <Notice tone="warning" className="mt-4">
+              <p>{simulationError}</p>
+              {setupSubmitAttempted && hasSetupFieldErrors ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {(Object.entries(setupFieldErrors) as [HiringSimulatorField, string][]).map(([field, error]) => (
+                    <li key={field}>
+                      {hiringSimulatorFieldLabel(field, language)}: {error}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </Notice>
+          ) : null}
         </PagePanel>
 
         <PagePanel>
@@ -397,7 +526,17 @@ export default function HiringSimulatorPage() {
                 </button>
                 {!canAnalyze ? <span className="text-sm text-[var(--muted)]">{t.analyzeHint}</span> : null}
               </div>
-              {analyzeError ? <Notice tone="warning" className="mt-4">{analyzeError}</Notice> : null}
+              {analyzeNotice ? (
+                <Notice
+                  tone={analyzeNotice.source === "answer_rejected" ? "warning" : "neutral"}
+                  className="mt-4"
+                >
+                  <strong>
+                    {analyzeNotice.source === "answer_rejected" ? t.answerRejected : t.analysisUnavailable}
+                  </strong>
+                  <span className="ko-friendly mt-1 block text-sm leading-6">{analyzeNotice.message}</span>
+                </Notice>
+              ) : null}
             </>
           ) : (
             <div className="mt-5"><EmptyState>{t.aiRoundPending}</EmptyState></div>
@@ -422,19 +561,16 @@ export default function HiringSimulatorPage() {
 
               {analysisResult ? (
                 <div className="mt-5 grid gap-3">
-                  <Notice tone={analysisResult.source === "openai" ? "success" : "neutral"}>
+                  <Notice tone="success">
                     {analysisResult.evaluationId ? `${t.saved} ` : ""}
-                    {isEn ? `Interview signal: ${analysisResult.overallScore}/100 · Pass practice signal: ${analysisResult.passProbability}%` : `면접 신호: ${analysisResult.overallScore}/100 · 통과 연습 신호: ${analysisResult.passProbability}%`}
+                    {t.analysisReady}
+                    <span className="ko-friendly mt-1 block text-sm leading-6">
+                      {t.answerScore}: {analysisResult.overallScore}/100
+                    </span>
                   </Notice>
-                  <FeedbackList title={t.strengths} items={analysisResult.strengths} />
-                  <FeedbackList title={t.weaknesses} items={analysisResult.weaknesses} />
-                  <FeedbackList title={t.recommendations} items={analysisResult.recommendations} />
-                  {analysisResult.nextPracticeQuestion ? (
-                    <div className="content-card p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{t.nextQuestion}</p>
-                      <p className="ko-friendly mt-2 text-sm leading-6 text-[var(--foreground)]">{analysisResult.nextPracticeQuestion}</p>
-                    </div>
-                  ) : null}
+                  <FeedbackList title={t.strengths} items={analysisResult.strengths} emptyLabel={t.strengthsEmpty} />
+                  <FeedbackList title={t.weaknesses} items={analysisResult.weaknesses} emptyLabel={t.weaknessesEmpty} />
+                  <FeedbackList title={t.recommendations} items={analysisResult.recommendations} emptyLabel={t.recommendationsEmpty} />
                 </div>
               ) : null}
             </>
@@ -467,14 +603,17 @@ function SignalList({ title, items, tone }: { title: string; items: string[]; to
   );
 }
 
-function FeedbackList({ title, items }: { title: string; items: string[] }) {
-  if (!items.length) return null;
+function FeedbackList({ title, items, emptyLabel }: { title: string; items: string[]; emptyLabel: string }) {
   return (
     <div className="content-card p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">{title}</p>
-      <ul className="ko-friendly mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--muted-strong)]">
-        {items.map((item) => <li key={item}>{item}</li>)}
-      </ul>
+      {items.length ? (
+        <ul className="ko-friendly mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-[var(--muted-strong)]">
+          {items.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">{emptyLabel}</p>
+      )}
     </div>
   );
 }

@@ -2,7 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { SegmentSelectField } from "@/components/settings-profile-fields";
 import { EmptyState, Notice, PageHeader, PagePanel, PageShell, SectionTitle } from "@/components/ui-shell";
+import { coverLetterFieldLabel, validateCoverLetterInput, type CoverLetterField } from "@/lib/cover-letter-validation";
 import { getSessionWithRetry, isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { useLanguage } from "@/components/language-provider";
 
@@ -14,6 +16,8 @@ type CoverLetterItem = {
   generated_text: string;
   created_at: string;
 };
+
+const HISTORY_PAGE_SIZE = 3;
 
 export default function CoverLetterPage() {
   const { language } = useLanguage();
@@ -30,15 +34,50 @@ export default function CoverLetterPage() {
     [t],
   );
 
+  const resumePlaceholder = useMemo(
+    () =>
+      t(
+        "예: SUNY Korea CSE 재학. React·Node.js 풀스택 캡스톤(채용 매칭 웹앱). 백엔드 인턴 2회 — REST API, PostgreSQL, 배포. TypeScript, Next.js, Git.",
+        "e.g., SUNY Korea CSE student. Full-stack capstone with React and Node.js (job-matching web app). Two backend internships — REST APIs, PostgreSQL, deployment. TypeScript, Next.js, Git.",
+      ),
+    [t],
+  );
+
+  const jobDescriptionPlaceholder = useMemo(
+    () =>
+      t(
+        "예: Kakao Fullstack Developer — React/TypeScript 프론트, Node.js API, DB 설계, 코드 리뷰, CI/CD 배포",
+        "e.g., Kakao Fullstack Developer — React/TypeScript frontend, Node.js APIs, database design, code review, CI/CD deployment",
+      ),
+    [t],
+  );
+
   const [resumeText, setResumeText] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [tone, setTone] = useState("professional");
   const [generatedText, setGeneratedText] = useState("");
   const [history, setHistory] = useState<CoverLetterItem[]>([]);
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<CoverLetterField, string>>>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyPage, setHistoryPage] = useState(0);
   const [deletingId, setDeletingId] = useState("");
+
+  const totalHistoryPages = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE));
+  const showHistoryPagination = history.length > HISTORY_PAGE_SIZE;
+  const paginatedHistory = useMemo(() => {
+    if (!showHistoryPagination) return history;
+    const start = historyPage * HISTORY_PAGE_SIZE;
+    return history.slice(start, start + HISTORY_PAGE_SIZE);
+  }, [history, historyPage, showHistoryPagination]);
+
+  useEffect(() => {
+    if (historyPage > totalHistoryPages - 1) {
+      setHistoryPage(Math.max(0, totalHistoryPages - 1));
+    }
+  }, [historyPage, totalHistoryPages]);
 
   const getAuthHeader = useCallback(async () => {
     if (!supabase || !isSupabaseConfigured) return "";
@@ -84,13 +123,36 @@ export default function CoverLetterPage() {
     return () => clearTimeout(timer);
   }, [loadHistory]);
 
+  const applyValidationErrors = useCallback(
+    (errors: Partial<Record<CoverLetterField, string>>, summary: string) => {
+      setFieldErrors(errors);
+      setMessage(summary);
+      const firstKey = Object.keys(errors)[0] as CoverLetterField | undefined;
+      if (!firstKey) return;
+      window.requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>(`[data-field="cover-letter-${firstKey}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    },
+    [],
+  );
+
   const generateCoverLetter = async (e: FormEvent) => {
     e.preventDefault();
+    setSubmitAttempted(true);
 
-    if (!resumeText.trim()) {
-      setMessage(t("이력서 텍스트를 입력해 주세요.", "Please enter resume text."));
+    const validation = validateCoverLetterInput(resumeText, jobDescription, language);
+    if (!validation.valid) {
+      applyValidationErrors(
+        validation.errors,
+        t(
+          `입력을 확인해 주세요. ${Object.keys(validation.errors).length}개 항목을 수정해야 합니다.`,
+          `Check your input. Fix ${Object.keys(validation.errors).length} field${Object.keys(validation.errors).length === 1 ? "" : "s"}.`,
+        ),
+      );
       return;
     }
+
+    setFieldErrors({});
 
     const authHeader = await getAuthHeader();
     if (!authHeader) {
@@ -118,11 +180,19 @@ export default function CoverLetterPage() {
 
     setLoading(false);
     if (!res.ok) {
+      const apiFieldErrors = json.fieldErrors as Partial<Record<CoverLetterField, string>> | undefined;
+      if (apiFieldErrors && Object.keys(apiFieldErrors).length > 0) {
+        applyValidationErrors(apiFieldErrors, json.error ?? t("입력 내용을 수정해 주세요.", "Fix the input and try again."));
+        return;
+      }
       setMessage(json.error ?? t("생성에 실패했습니다.", "Failed to generate."));
       return;
     }
 
+    setSubmitAttempted(false);
+
     setGeneratedText(json.generatedText ?? "");
+    setHistoryPage(0);
     setMessage(t("커버레터 초안 생성 및 저장이 완료되었습니다.", "Cover letter draft generated and saved."));
     void loadHistory();
   };
@@ -132,6 +202,8 @@ export default function CoverLetterPage() {
     setJobDescription(item.job_description ?? "");
     setTone(item.tone ?? "professional");
     setGeneratedText(item.generated_text ?? "");
+    setFieldErrors({});
+    setSubmitAttempted(false);
     setMessage(t("이전 입력값을 불러왔습니다. 재생성 버튼을 누르면 새 버전이 생성됩니다.", "Previous input loaded. Click generate to create a new version."));
   };
 
@@ -198,32 +270,51 @@ export default function CoverLetterPage() {
             <div>
               <label className="form-label">{t("이력서 텍스트", "Resume Text")}</label>
               <textarea
+                data-field="cover-letter-resumeText"
                 value={resumeText}
-                onChange={(e) => setResumeText(e.target.value)}
-                className="field min-h-36"
-                placeholder={t("학력, 프로젝트, 인턴, 성과를 붙여 넣으세요.", "Paste education, projects, internships, and outcomes.")}
+                onChange={(e) => {
+                  setResumeText(e.target.value);
+                  setFieldErrors((prev) => {
+                    if (!prev.resumeText) return prev;
+                    const next = { ...prev };
+                    delete next.resumeText;
+                    return next;
+                  });
+                }}
+                aria-invalid={Boolean(fieldErrors.resumeText)}
+                className={`field mt-1 min-h-36${fieldErrors.resumeText ? " border-[var(--warning)]" : ""}`}
+                placeholder={resumePlaceholder}
                 required
               />
+              {fieldErrors.resumeText ? <span className="mt-1 block text-xs text-[var(--warning)]">{fieldErrors.resumeText}</span> : null}
             </div>
             <div>
               <label className="form-label">{t("지원 직무/공고 설명", "Target Role / Job Description")}</label>
               <textarea
+                data-field="cover-letter-jobDescription"
                 value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
-                className="field min-h-24"
-                placeholder={t("지원 포지션 설명을 넣으면 더 정확해집니다.", "Adding job description improves precision.")}
+                onChange={(e) => {
+                  setJobDescription(e.target.value);
+                  setFieldErrors((prev) => {
+                    if (!prev.jobDescription) return prev;
+                    const next = { ...prev };
+                    delete next.jobDescription;
+                    return next;
+                  });
+                }}
+                aria-invalid={Boolean(fieldErrors.jobDescription)}
+                className={`field mt-1 min-h-24${fieldErrors.jobDescription ? " border-[var(--warning)]" : ""}`}
+                placeholder={jobDescriptionPlaceholder}
               />
+              {fieldErrors.jobDescription ? <span className="mt-1 block text-xs text-[var(--warning)]">{fieldErrors.jobDescription}</span> : null}
             </div>
-            <div>
-              <label className="form-label">{t("작성 톤", "Tone")}</label>
-              <select value={tone} onChange={(e) => setTone(e.target.value)} className="field">
-                {toneOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SegmentSelectField
+              label={t("작성 톤", "Tone")}
+              name="cover-letter-tone"
+              value={tone}
+              options={toneOptions}
+              onChange={setTone}
+            />
             <div className="flex flex-col gap-2 sm:flex-row">
               <button disabled={loading} className="primary-btn px-4 py-2 text-sm disabled:opacity-60">
                 {loading ? t("생성 중...", "Generating...") : t("커버레터 생성/재생성", "Generate / Regenerate")}
@@ -231,7 +322,20 @@ export default function CoverLetterPage() {
             </div>
           </form>
 
-          {message && <Notice className="mt-5">{message}</Notice>}
+          {message ? (
+            <Notice className="mt-5" tone={submitAttempted && Object.keys(fieldErrors).length > 0 ? "warning" : undefined}>
+              <p>{message}</p>
+              {submitAttempted && Object.keys(fieldErrors).length > 0 ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {(Object.entries(fieldErrors) as [CoverLetterField, string][]).map(([field, error]) => (
+                    <li key={field}>
+                      <span className="font-medium">{coverLetterFieldLabel(field, language)}</span>: {error}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </Notice>
+          ) : null}
         </PagePanel>
 
         <PagePanel>
@@ -277,27 +381,52 @@ export default function CoverLetterPage() {
           ) : history.length === 0 ? (
             <EmptyState>{t("아직 저장된 결과가 없습니다.", "No saved results yet.")}</EmptyState>
           ) : (
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
-              {history.map((item) => (
-                <div key={item.id} className="content-card flex min-h-[11rem] flex-col p-4">
-                  <p className="text-xs text-[var(--muted)]">{new Date(item.created_at).toLocaleString(isEn ? "en-US" : "ko-KR")}</p>
-                  <p className="ko-friendly mt-2 flex-1 text-sm leading-6 text-[var(--muted-strong)] line-clamp-3">{item.generated_text}</p>
-                  <div className="mt-4 flex items-end justify-between gap-3">
-                    <button type="button" onClick={() => handleReuse(item)} className="secondary-btn px-3 py-1.5 text-xs">
-                      {t("불러와서 재생성", "Load and regenerate")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(item)}
-                      disabled={deletingId === item.id}
-                      className="danger-btn px-3 py-1.5 text-xs disabled:opacity-60"
-                    >
-                      {deletingId === item.id ? t("삭제 중...", "Deleting...") : t("삭제", "Delete")}
-                    </button>
+            <>
+              <div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                {paginatedHistory.map((item) => (
+                  <div key={item.id} className="content-card flex min-h-[11rem] flex-col p-4">
+                    <p className="text-xs text-[var(--muted)]">{new Date(item.created_at).toLocaleString(isEn ? "en-US" : "ko-KR")}</p>
+                    <p className="ko-friendly mt-2 flex-1 text-sm leading-6 text-[var(--muted-strong)] line-clamp-3">{item.generated_text}</p>
+                    <div className="mt-4 flex items-end justify-between gap-3">
+                      <button type="button" onClick={() => handleReuse(item)} className="secondary-btn px-3 py-1.5 text-xs">
+                        {t("불러와서 재생성", "Load and regenerate")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(item)}
+                        disabled={deletingId === item.id}
+                        className="danger-btn px-3 py-1.5 text-xs disabled:opacity-60"
+                      >
+                        {deletingId === item.id ? t("삭제 중...", "Deleting...") : t("삭제", "Delete")}
+                      </button>
+                    </div>
                   </div>
+                ))}
+              </div>
+              {showHistoryPagination ? (
+                <div className="mt-4 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryPage((page) => Math.max(0, page - 1))}
+                    disabled={historyPage === 0}
+                    className="secondary-btn px-3 py-2 text-sm disabled:opacity-60"
+                  >
+                    {t("이전", "Previous")}
+                  </button>
+                  <p className="min-w-[5.5rem] text-center text-sm text-[var(--muted)]">
+                    {historyPage + 1} / {totalHistoryPages}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryPage((page) => Math.min(totalHistoryPages - 1, page + 1))}
+                    disabled={historyPage >= totalHistoryPages - 1}
+                    className="secondary-btn px-3 py-2 text-sm disabled:opacity-60"
+                  >
+                    {t("다음", "Next")}
+                  </button>
                 </div>
-              ))}
-            </div>
+              ) : null}
+            </>
           )}
       </PagePanel>
     </PageShell>

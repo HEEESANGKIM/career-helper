@@ -2,6 +2,7 @@
 import Link from "next/link";
 import "./globals.css";
 import AuthControls from "@/components/auth-controls";
+import { ProfileGateProvider } from "@/components/profile-gate-provider";
 import ThemeToggle from "@/components/theme-toggle";
 import LanguageToggle from "@/components/language-toggle";
 import { LanguageProvider } from "@/components/language-provider";
@@ -39,7 +40,8 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <LanguageProvider>
-          <header className="top-nav">
+          <ProfileGateProvider>
+            <header className="top-nav">
             <div className="top-nav__bar mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
               <Link href="/" aria-label="PathMate Home" className="top-nav-logo">
                 <img
@@ -58,6 +60,7 @@ export default function RootLayout({
             </div>
           </header>
           {children}
+          </ProfileGateProvider>
         </LanguageProvider>
       </body>
     </html>

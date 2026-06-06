@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { clampScore, cleanText, getUserIdFromRequest, openai, parseJsonObject } from "@/lib/evaluation-server";
+import { validateHiringSimulatorSetup } from "@/lib/hiring-simulator-validation";
 import { parseProfileSkills, parseSkillList } from "@/lib/skill-list";
 
 export const runtime = "nodejs";
@@ -25,7 +26,6 @@ type ProfileRow = {
   target_industry?: string | null;
   preferred_location?: string | null;
   portfolio_url?: string | null;
-  github_url?: string | null;
   experience_summary?: string | null;
   internship_count?: number | null;
   project_count?: number | null;
@@ -125,6 +125,27 @@ export async function POST(request: NextRequest) {
     experienceLevel: cleanText(body?.experienceLevel, 120),
     jobDescription: cleanText(body?.jobDescription, 1600),
   };
+
+  const setupValidation = validateHiringSimulatorSetup(
+    targetOverrides.targetRole ?? "",
+    targetOverrides.targetCompany ?? "",
+    targetOverrides.jobDescription ?? "",
+    language,
+  );
+  if (!setupValidation.valid) {
+    const errorCount = Object.keys(setupValidation.errors).length;
+    return NextResponse.json(
+      {
+        error:
+          language === "en"
+            ? `Fix ${errorCount} field${errorCount === 1 ? "" : "s"} before starting the simulation.`
+            : `시뮬레이션 시작 전에 ${errorCount}개 항목을 수정해 주세요.`,
+        fieldErrors: setupValidation.errors,
+      },
+      { status: 400 },
+    );
+  }
+
   const userId = await getUserIdFromRequest(request);
   if (!serviceClient || !userId) {
     const guestBase = applyTargetOverrides(fallback(null, [], language), targetOverrides);
@@ -133,7 +154,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await serviceClient
     .from("profiles")
-    .select("full_name, school_name, major, gpa_score, gpa, core_skills, tech_stack, skills, role_certifications, desired_companies, target_industry, preferred_location, portfolio_url, github_url, experience_summary, internship_count, project_count, target_role")
+    .select("full_name, school_name, major, gpa_score, gpa, core_skills, tech_stack, skills, role_certifications, desired_companies, target_industry, preferred_location, portfolio_url, experience_summary, internship_count, project_count, target_role")
     .eq("user_id", userId)
     .maybeSingle<ProfileRow>();
 

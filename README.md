@@ -1,4 +1,4 @@
-# PathMate.ai
+# Pathmate.ai
 
 An AI-powered career cockpit for students and job seekers. PathMate helps users build a structured profile, practice the hiring loop, compare career paths, and discover realistic job matches.
 
@@ -12,7 +12,7 @@ An AI-powered career cockpit for students and job seekers. PathMate helps users 
 
 **The problem:** Candidates often struggle to tell which roles realistically fit their background (GPA, projects, internships, skills) and how to improve applications for those roles.
 
-**Our solution:** PathMate turns profile data into AI-ready context, then delivers dashboard insights, resume support, hiring simulations, career planning, and live job matching in one web app.
+**Our solution:** Pathmate turns profile data into AI-ready context, then delivers dashboard insights, resume support, hiring simulations, career planning, and live job matching in one web app.
 
 ---
 
@@ -26,7 +26,6 @@ An AI-powered career cockpit for students and job seekers. PathMate helps users 
 | **Hiring Simulator** | `/hiring-simulator` | Application fit, interview question practice, and answer feedback |
 | **Next Move** | `/next-move` | Career strategy board to compare paths, risk, and long-term outcomes |
 | **Job Match** | `/matching` | Profile-based live job search with fit scores and favorites |
-| **Background Check** | `/background-check` | AI review of public links and application content |
 
 **Also included**
 - Bilingual UI (Korean / English)
@@ -175,12 +174,6 @@ npm run build
 npm start
 ```
 
-### Useful scripts
-```bash
-npm run lint          # ESLint
-npm run data:seed     # Seed career reference data (optional)
-```
-
 ---
 
 ## 7. API Overview
@@ -213,7 +206,3 @@ We use **GitHub Issues**:
 4. Add a label when possible (`bug`, `ui`, `ai-api`, etc.).
 
 ---
-
-## License
-
-Private academic / project repository. All rights reserved by the team unless stated otherwise.

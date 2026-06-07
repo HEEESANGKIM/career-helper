@@ -39,7 +39,7 @@ type RealJob = {
   summary: string;
   publishedAt: string;
   deadline: string;
-  hiringStatus: "open" | "unknown";
+  hiringStatus: "open" | "closed" | "unknown";
   source: "verified_web_search";
   sourceLabel: string;
   fitScore: number;
@@ -69,6 +69,8 @@ export default function MatchingPage() {
   const [loading, setLoading] = useState(true);
   const [jobPool, setJobPool] = useState<RealJob[]>([]);
   const [realJobs, setRealJobs] = useState<RealJob[]>([]);
+  const [expiredJobs, setExpiredJobs] = useState<RealJob[]>([]);
+  const [hasOpenJobs, setHasOpenJobs] = useState(true);
   const [recommendedRoles, setRecommendedRoles] = useState<string[]>([]);
   const [realJobsSource, setRealJobsSource] = useState("");
   const [realJobsLoading, setRealJobsLoading] = useState(false);
@@ -79,7 +81,6 @@ export default function MatchingPage() {
   const [detailLoadingKey, setDetailLoadingKey] = useState("");
   const [detailAnalysis, setDetailAnalysis] = useState<JobDetailAnalysis | null>(null);
   const [detailJob, setDetailJob] = useState<RealJob | null>(null);
-  const [applicationStatuses, setApplicationStatuses] = useState<Record<string, string>>({});
   const [favoriteByUrl, setFavoriteByUrl] = useState<Record<string, string>>({});
   const [favoriteSavingUrl, setFavoriteSavingUrl] = useState("");
   const jobsFetchInFlightRef = useRef(false);
@@ -95,6 +96,12 @@ export default function MatchingPage() {
     if (source === "verified_web_search") return t("검증된 웹 검색", "Verified web search");
     if (source === "cache") return t("저장된 검증 결과", "Cached verified result");
     return t("검색 중", "Searching");
+  };
+
+  const hiringStatusLabel = (status: RealJob["hiringStatus"]) => {
+    if (status === "open") return t("모집중", "Open");
+    if (status === "closed") return t("마감", "Closed");
+    return t("확인필요", "Unknown");
   };
 
   const hiddenOpportunities = useMemo(() => {
@@ -130,8 +137,12 @@ export default function MatchingPage() {
 
   const applyJobPoolResponse = useCallback((json: Record<string, unknown>) => {
     const pool = (Array.isArray(json.pool) ? json.pool : json.items) as RealJob[];
+    const items = (Array.isArray(json.items) ? json.items : []) as RealJob[];
+    const expiredItems = (Array.isArray(json.expiredItems) ? json.expiredItems : []) as RealJob[];
     setJobPool(pool);
-    setRealJobs(pool);
+    setRealJobs(items);
+    setExpiredJobs(expiredItems);
+    setHasOpenJobs(json.hasOpenJobs !== false);
     setRecommendedRoles((json.recommendedRoles as string[]) ?? []);
     setRealJobsSource(String(json.source ?? ""));
     setPoolNote(typeof json.poolNote === "string" ? json.poolNote : "");
@@ -376,6 +387,9 @@ export default function MatchingPage() {
     setDetailAnalysis(json);
   };
 
+  const displayedJobs = realJobs.length > 0 ? realJobs : expiredJobs;
+  const showingExpiredJobs = !hasOpenJobs && expiredJobs.length > 0;
+
   return (
     <PageShell maxWidth="max-w-7xl">
       <PageHeader
@@ -463,8 +477,10 @@ export default function MatchingPage() {
                 <SectionTitle
                   title={t("현재 모집중 실공고 추천", "Live Job Recommendations")}
                   description={
-                    jobPool.length > 0
-                      ? t(`검증된 추천 ${jobPool.length}건`, `${jobPool.length} verified pick(s)`)
+                    realJobs.length > 0
+                      ? t(`현재 모집중 ${realJobs.length}건`, `${realJobs.length} open pick(s)`)
+                      : expiredJobs.length > 0
+                        ? t(`지난 공고 ${expiredJobs.length}건`, `${expiredJobs.length} past posting(s)`)
                       : sourceLabel(realJobsSource)
                   }
                 />
@@ -505,11 +521,15 @@ export default function MatchingPage() {
               {!realJobsLoading && !realJobsRefreshing && poolNote && (
                 <Notice className="mt-2">{poolNote}</Notice>
               )}
-              {!realJobsLoading && !realJobsRefreshing && !realJobsMessage && realJobs.length > 0 && (
+              {!realJobsLoading && !realJobsRefreshing && !realJobsMessage && showingExpiredJobs && (
+                <Notice className="mt-2" tone="warning">
+                  {t("현재 지원중인 공고가 없습니다. 아래에 지난 공고를 참고용으로 표시합니다.", "There are no currently open postings. Past postings are shown below for reference.")}
+                </Notice>
+              )}
+              {!realJobsLoading && !realJobsRefreshing && !realJobsMessage && displayedJobs.length > 0 && (
                 <div className="mt-3 space-y-3">
-                  {realJobs.map((job, idx) => {
+                  {displayedJobs.map((job, idx) => {
                     const jobKey = `${job.url}-${idx}`;
-                    const status = applicationStatuses[jobKey] ?? "not_applied";
                     return (
                     <div key={jobKey} className="content-card p-4">
                       <div className="grid gap-4 lg:grid-cols-[auto_1fr_auto] lg:items-start">
@@ -524,8 +544,8 @@ export default function MatchingPage() {
                           <p className="text-sm text-[var(--muted)]">
                             {job.company} · {job.location}
                           </p>
-                          <p className="mt-1 text-xs text-[var(--success)]">
-                            {t("모집상태", "Hiring status")}: {job.hiringStatus === "open" ? t("모집중", "Open") : t("확인필요", "Unknown")}
+                          <p className={`mt-1 text-xs ${job.hiringStatus === "closed" ? "text-[var(--warning)]" : "text-[var(--success)]"}`}>
+                            {t("모집상태", "Hiring status")}: {hiringStatusLabel(job.hiringStatus)}
                           </p>
                           <p className="mt-1 text-xs text-[var(--muted)]">
                             {t("출처", "Source")}: {job.sourceLabel}
@@ -625,29 +645,6 @@ export default function MatchingPage() {
                       >
                         {detailLoadingKey === jobKey ? t("분석 중...", "Analyzing...") : t("AI 상세 분석", "AI Detail Analysis")}
                       </button>
-                      <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                        <label className="block">
-                          <span className="form-label">{t("지원 상태", "Application status")}</span>
-                          <select
-                            value={status}
-                            onChange={(e) => setApplicationStatuses((prev) => ({ ...prev, [jobKey]: e.target.value }))}
-                            className="field mt-1"
-                          >
-                            <option value="not_applied">{t("미지원", "Not applied")}</option>
-                            <option value="applied">{t("지원 완료", "Applied")}</option>
-                            <option value="interviewing">{t("면접 진행 중", "Interviewing")}</option>
-                            <option value="offer_received">{t("오퍼 수령", "Offer Received")}</option>
-                          </select>
-                        </label>
-                        {status === "offer_received" ? (
-                          <div className="content-card border-[color-mix(in_srgb,var(--success)_42%,var(--line))] p-3">
-                            <p className="ko-friendly text-sm font-semibold text-[var(--foreground)]">{t("답장 전 협상 연습", "Practice negotiation before replying.")}</p>
-                            <p className="ko-friendly mt-1 text-xs leading-5 text-[var(--muted)]">
-                              {t("협상 가능 영역: 연봉, 입사일, 직함, 사이닝 보너스, 근무 방식", "Likely negotiable areas: salary, start date, title, signing bonus, work setup")}
-                            </p>
-                          </div>
-                        ) : null}
-                      </div>
                     </div>
                     );
                   })}

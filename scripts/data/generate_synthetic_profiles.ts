@@ -6,6 +6,8 @@ type SyntheticProfile = {
   profile_id: string;
   education_background: string;
   major: string;
+  gpa_score: number;
+  gpa_scale: number;
   starting_status: string;
   skills: string[];
   internships: string[];
@@ -37,6 +39,8 @@ function validateProfile(value: unknown): value is SyntheticProfile {
     item?.profile_id &&
       item.profile_id.startsWith("Candidate_") &&
       item.target_role &&
+      Number.isFinite(item.gpa_score) &&
+      Number.isFinite(item.gpa_scale) &&
       Array.isArray(item.skills) &&
       Array.isArray(item.projects) &&
       item.notes?.toLowerCase().includes("fictional"),
@@ -46,10 +50,13 @@ function validateProfile(value: unknown): value is SyntheticProfile {
 function fallbackProfile(index: number): SyntheticProfile {
   const template = (templates as Array<{ role: string; required_skills?: string[]; recommended_projects?: string[]; salary_band?: { entry?: string } }>)[index % (templates as unknown[]).length];
   const id = `Candidate_${String(index + 1).padStart(4, "0")}`;
+  const gpaSamples = [2.55, 2.75, 2.9, 3.0, 3.1, 3.25, 3.4, 3.55, 3.7, 3.9];
   return {
     profile_id: id,
     education_background: index % 3 === 0 ? "public university undergraduate" : index % 3 === 1 ? "community college transfer" : "bootcamp / certificate learner",
     major: index % 2 === 0 ? "Computer Science" : "Business or Design",
+    gpa_score: gpaSamples[index % gpaSamples.length],
+    gpa_scale: 4.0,
     starting_status: index % 4 === 0 ? "student" : index % 4 === 1 ? "new graduate" : index % 4 === 2 ? "intern" : "career switcher",
     skills: template.required_skills?.slice(0, 4) ?? ["communication", "analysis", "documentation"],
     internships: index % 2 === 0 ? ["small company internship"] : [],
@@ -79,7 +86,8 @@ async function generateBatch(start: number, size: number) {
     "Create realistic but clearly fictional early-career trajectories for PathMate.ai.",
     "Do not use real names. Use profile_id values like Candidate_0001. Do not claim LinkedIn data.",
     "Return JSON only: {\"profiles\":[...]}",
-    "Each profile must include: profile_id, education_background, major, starting_status, skills, internships, projects, target_role, target_industry, risk_tolerance, constraints, year_0_state, year_1_state, year_2_state, year_3_state, year_5_state, key_decisions, risk_events, outcome_label, salary_range_estimate, skill_growth, notes.",
+    "Each profile must include: profile_id, education_background, major, gpa_score, gpa_scale, starting_status, skills, internships, projects, target_role, target_industry, risk_tolerance, constraints, year_0_state, year_1_state, year_2_state, year_3_state, year_5_state, key_decisions, risk_events, outcome_label, salary_range_estimate, skill_growth, notes.",
+    "Use fictional GPA values on a 4.0 scale with a realistic range from 2.5 to 4.0.",
     `Generate ${size} profiles starting at Candidate_${String(start + 1).padStart(4, "0")}. Cover these roles: ${(templates as Array<{ role: string }>).map((template) => template.role).join(", ")}.`,
   ].join("\n");
 

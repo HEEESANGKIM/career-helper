@@ -37,6 +37,8 @@ export type SyntheticCareerProfile = {
   profile_id: string;
   education_background: string;
   major: string;
+  gpa_score?: number | null;
+  gpa_scale?: number | null;
   starting_status: string;
   skills: string[];
   internships: string[];

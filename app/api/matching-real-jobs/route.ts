@@ -6,7 +6,7 @@ import { hasMinimumProfileForMatching, minimumProfileMatchingMessage } from "@/l
 
 export const runtime = "nodejs";
 
-type HiringStatus = "open" | "unknown";
+type HiringStatus = "open" | "closed" | "unknown";
 type CompetitionLevel = "low" | "moderate" | "high" | "unknown";
 type SourceKind = "verified_web_search";
 
@@ -55,6 +55,8 @@ type RealJobResponse = {
   recommendedRoles: string[];
   marketInsights: MarketInsights;
   items: RealJob[];
+  expiredItems: RealJob[];
+  hasOpenJobs: boolean;
   pool: RealJob[];
   poolIndex: number;
   poolSize: number;
@@ -163,6 +165,39 @@ const parsePublishedDate = (value: string) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const todayUtc = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+  return Date.UTC(year, month - 1, day);
+};
+
+const parseDeadlineDate = (value: string) => {
+  const text = cleanText(value).toLowerCase();
+  if (!text || text === "unknown") return null;
+  if (/상시|채용시|until filled|rolling|always open/.test(text)) return "rolling" as const;
+
+  const match = text.match(/(20\d{2})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);
+  if (!match) return null;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const isDeadlineExpired = (deadline: string) => {
+  const parsed = parseDeadlineDate(deadline);
+  if (!parsed || parsed === "rolling") return false;
+  return parsed.getTime() < todayUtc();
+};
+
 const isRecentPosting = (publishedAt: string, maxDays = 45) => {
   if (publishedAt === "unknown") return true;
   const publishedDate = parsePublishedDate(publishedAt);
@@ -176,6 +211,11 @@ const isRecentPosting = (publishedAt: string, maxDays = 45) => {
 const isLikelyClosed = (job: Partial<RealJob>) => {
   const text = `${job.title ?? ""} ${job.summary ?? ""}`.toLowerCase();
   return ["마감", "종료", "모집완료", "closed", "expired"].some((keyword) => text.includes(keyword));
+};
+
+const hasClosedSignal = (job: Partial<RealJob>) => {
+  const text = `${job.title ?? ""} ${job.summary ?? ""} ${job.deadline ?? ""}`.toLowerCase();
+  return isLikelyClosed(job) || ["마감", "종료", "모집완료", "지원 마감", "접수 마감", "closed", "expired"].some((keyword) => text.includes(keyword));
 };
 
 const isTrustedJobUrl = (url: string) => {
@@ -205,6 +245,12 @@ const UNKNOWN_LOCATION_KO = "지역 미공개";
 const UNKNOWN_LOCATION_EN = "Location not disclosed";
 
 const unknownLocation = (lang: LanguageMode) => (lang === "en" ? UNKNOWN_LOCATION_EN : UNKNOWN_LOCATION_KO);
+
+const hiringStatusRank = (status: HiringStatus) => {
+  if (status === "open") return 0;
+  if (status === "unknown") return 1;
+  return 2;
+};
 
 const competitionText = (
   applicants: number | null,
@@ -404,7 +450,8 @@ const toEvidence = (label: string, url: string, sourceType: EvidenceSource["sour
 });
 
 const verifyLiveJobPosting = async (job: RealJob) => {
-  if (!isTrustedJobUrl(job.url) || isLikelyClosed(job)) return false;
+  if (!isTrustedJobUrl(job.url)) return null;
+  if (hasClosedSignal(job) || isDeadlineExpired(job.deadline)) return "closed" as const;
 
   try {
     const response = await fetch(job.url, {
@@ -416,12 +463,12 @@ const verifyLiveJobPosting = async (job: RealJob) => {
       },
     });
 
-    if (!response.ok) return false;
+    if (!response.ok) return null;
     const finalUrl = response.url || job.url;
-    if (!isTrustedJobUrl(finalUrl)) return false;
+    if (!isTrustedJobUrl(finalUrl)) return null;
 
     const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.toLowerCase().includes("text/html")) return false;
+    if (!contentType.toLowerCase().includes("text/html")) return null;
 
     const html = (await response.text()).slice(0, 220000).toLowerCase();
     const closedMarkers = [
@@ -433,10 +480,18 @@ const verifyLiveJobPosting = async (job: RealJob) => {
       "지원이 마감",
       "recruitment has closed",
       "this job is no longer",
+      "마감된 공고",
+      "채용공고가 마감",
+      "접수 마감",
+      "모집마감",
+      "채용마감",
+      "지원이 마감",
+      "closed",
+      "expired",
     ];
-    return !closedMarkers.some((marker) => html.includes(marker));
+    return closedMarkers.some((marker) => html.includes(marker)) ? "closed" : "open";
   } catch {
-    return false;
+    return null;
   }
 };
 
@@ -451,6 +506,12 @@ const normalizeWebItem = (raw: unknown, profile: ProfileRow | null, lang: Langua
   const applicantCount = readNumber(job.applicantCount);
   const viewCount = readNumber(job.viewCount);
   const competitionLevel = getCompetitionLevel(applicantCount);
+  const deadline = cleanText(job.deadline) || "unknown";
+  const hiringStatus = hasClosedSignal(job) || isDeadlineExpired(deadline)
+    ? "closed"
+    : job.hiringStatus === "open"
+      ? "open"
+      : "unknown";
   const L = (ko: string, en: string) => (lang === "en" ? en : ko);
   const baseJob = {
     title,
@@ -461,8 +522,8 @@ const normalizeWebItem = (raw: unknown, profile: ProfileRow | null, lang: Langua
       limitText(job.summary, 260) ||
       L("검증된 채용 플랫폼에서 확인된 공고입니다.", "Posting verified on a trusted job platform."),
     publishedAt: cleanText(job.publishedAt) || "unknown",
-    deadline: cleanText(job.deadline) || "unknown",
-    hiringStatus: (job.hiringStatus === "open" ? "open" : "unknown") as HiringStatus,
+    deadline,
+    hiringStatus: hiringStatus as HiringStatus,
     source: "verified_web_search" as const,
     sourceLabel: L("검증된 웹 검색", "Verified web search"),
     applicantCount,
@@ -503,6 +564,7 @@ const fetchVerifiedWebJobs = async (
   coverLetters: CoverLetterRow[],
   lang: LanguageMode,
   excludeUrls: string[] = [],
+  includeExpiredFallback = false,
 ) => {
   if (!openai) return [] as RealJob[];
 
@@ -555,6 +617,11 @@ const fetchVerifiedWebJobs = async (
       ? `Profile: ${buildProfileText(profile, coverLetters).slice(0, 2400) || "Insufficient profile text"}`
       : `프로필: ${buildProfileText(profile, coverLetters).slice(0, 2400) || "프로필 정보 부족"}`,
     excludeBlock,
+    includeExpiredFallback
+      ? lang === "en"
+        ? "Fallback mode: if no currently open postings are available, include recently closed postings and set hiringStatus to closed. Do not mark expired postings as open."
+        : "Fallback mode: 현재 모집중 공고가 없으면 최근 마감 공고를 포함하고 hiringStatus를 closed로 설정하세요. 마감 공고를 open으로 표시하지 마세요."
+      : "",
     "",
     `{
   "items": [
@@ -566,7 +633,7 @@ const fetchVerifiedWebJobs = async (
       "summary": "...",
       "publishedAt": "YYYY-MM-DD 또는 unknown",
       "deadline": "YYYY-MM-DD 또는 상시채용 또는 unknown",
-      "hiringStatus": "open",
+      "hiringStatus": "open | closed | unknown",
       "applicantCount": null,
       "viewCount": null
     }
@@ -586,16 +653,17 @@ const fetchVerifiedWebJobs = async (
     const normalized = candidates
       .map((item) => normalizeWebItem(item, profile, lang))
       .filter((item): item is RealJob => Boolean(item))
-      .filter(
-        (item) =>
-          (item.hiringStatus === "open" || item.hiringStatus === "unknown") && isRecentPosting(item.publishedAt),
+      .filter((item) =>
+        item.hiringStatus === "closed"
+          ? isRecentPosting(item.publishedAt, 180) || isDeadlineExpired(item.deadline)
+          : isRecentPosting(item.publishedAt),
       )
       .slice(0, MAX_CANDIDATES);
 
     const verified = await Promise.all(
       normalized.map(async (item) => {
-        const ok = await verifyLiveJobPosting(item);
-        return ok ? item : null;
+        const status = await verifyLiveJobPosting(item);
+        return status ? { ...item, hiringStatus: status } : null;
       }),
     );
 
@@ -607,7 +675,10 @@ const fetchVerifiedWebJobs = async (
         if (excludeUrls.includes(item.url)) return false;
         return true;
       })
-      .sort((a, b) => b.priorityScore - a.priorityScore)
+      .sort((a, b) => {
+        if (a.hiringStatus !== b.hiringStatus) return hiringStatusRank(a.hiringStatus) - hiringStatusRank(b.hiringStatus);
+        return b.priorityScore - a.priorityScore;
+      })
       .slice(0, POOL_TARGET_SIZE);
   } catch {
     return [];
@@ -622,7 +693,12 @@ const mergeJobPools = (existing: RealJob[], incoming: RealJob[]) => {
     seen.add(job.url);
     merged.push(job);
   }
-  return merged.sort((a, b) => b.priorityScore - a.priorityScore).slice(0, POOL_TARGET_SIZE);
+  return merged
+    .sort((a, b) => {
+      if (a.hiringStatus !== b.hiringStatus) return hiringStatusRank(a.hiringStatus) - hiringStatusRank(b.hiringStatus);
+      return b.priorityScore - a.priorityScore;
+    })
+    .slice(0, POOL_TARGET_SIZE);
 };
 
 const buildVerifiedJobPool = async (
@@ -651,6 +727,14 @@ const buildVerifiedJobPool = async (
     ]);
     pool = mergeJobPools(pool, batch);
     if (batch.length === 0 && pass > 0) break;
+  }
+
+  if (!pool.some((job) => job.hiringStatus !== "closed")) {
+    const fallbackBatch = await fetchVerifiedWebJobs(roleSeeds.slice(0, 3), profile, coverLetters, lang, [
+      ...excluded,
+      ...pool.map((job) => job.url),
+    ], true);
+    pool = mergeJobPools(pool, fallbackBatch);
   }
 
   return pool;
@@ -722,7 +806,7 @@ const normalizeCachedItem = (raw: unknown, lang: LanguageMode): RealJob | null =
       summary: cleanText(item.summary) || L("검증된 채용 공고입니다.", "Verified job posting."),
       publishedAt: cleanText(item.publishedAt) || "unknown",
       deadline: cleanText(item.deadline) || "unknown",
-      hiringStatus: item.hiringStatus === "open" ? "open" : "unknown",
+      hiringStatus: item.hiringStatus === "closed" || isDeadlineExpired(cleanText(item.deadline) || "unknown") || hasClosedSignal(item) ? "closed" : item.hiringStatus === "open" ? "open" : "unknown",
       source: "verified_web_search",
       sourceLabel:
         cleanText(item.sourceLabel) ||
@@ -769,7 +853,9 @@ const normalizeCachedResponse = (raw: unknown, searchedAt: string, lang: Languag
       source: "cache",
       searchedAt,
     },
-    items: pool[poolIndex] ? [pool[poolIndex]] : [],
+    items: pool.filter((item) => item.hiringStatus !== "closed"),
+    expiredItems: pool.some((item) => item.hiringStatus !== "closed") ? [] : pool.filter((item) => item.hiringStatus === "closed"),
+    hasOpenJobs: pool.some((item) => item.hiringStatus !== "closed"),
     pool,
     poolIndex,
     poolSize: pool.length,
@@ -789,14 +875,19 @@ const buildPoolPayload = (
     marketInsights.averageApplicantsPerPosting,
     lang,
   );
+  const openItems = localizedPool.filter((item) => item.hiringStatus !== "closed");
+  const expiredItems = localizedPool.filter((item) => item.hiringStatus === "closed");
+  const displayItems = openItems.length > 0 ? openItems : [];
   const safeIndex = localizedPool.length === 0 ? 0 : clamp(poolIndex, 0, localizedPool.length - 1);
   return {
     recommendedRoles,
     marketInsights,
     pool: localizedPool,
     poolIndex: safeIndex,
-    poolSize: localizedPool.length,
-    items: localizedPool,
+    poolSize: displayItems.length || expiredItems.length,
+    items: displayItems,
+    expiredItems: displayItems.length > 0 ? [] : expiredItems,
+    hasOpenJobs: displayItems.length > 0,
   };
 };
 
@@ -806,6 +897,7 @@ const relocalizeCachedJob = (item: RealJob, profile: ProfileRow | null, lang: La
   return {
     ...item,
     ...scored,
+    hiringStatus: item.hiringStatus === "closed" || isDeadlineExpired(item.deadline) || hasClosedSignal(item) ? "closed" : item.hiringStatus,
     location:
       item.location === UNKNOWN_LOCATION_KO || item.location === UNKNOWN_LOCATION_EN
         ? unknownLocation(lang)
@@ -912,8 +1004,8 @@ export async function GET(request: NextRequest) {
 
   const recommendedRoles = await getRecommendedRoles(typedProfile, typedCoverLetters, language);
 
-  let source: MarketInsights["source"] = "verified_web_search";
-  let postingPoolSize: number | null = null;
+  const source: MarketInsights["source"] = "verified_web_search";
+  const postingPoolSize: number | null = null;
   const pool = await buildVerifiedJobPool(recommendedRoles, typedProfile, typedCoverLetters, language, excludeUrls);
 
   if (pool.length === 0) {

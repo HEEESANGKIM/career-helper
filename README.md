@@ -205,4 +205,4 @@ We use **GitHub Issues**:
 3. Include steps to reproduce, expected vs actual behavior, and screenshots if UI-related.
 4. Add a label when possible (`bug`, `ui`, `ai-api`, etc.).
 
----
+

@@ -79,6 +79,7 @@ export default function MatchingPage() {
   const [refreshError, setRefreshError] = useState("");
   const [poolNote, setPoolNote] = useState("");
   const [detailLoadingKey, setDetailLoadingKey] = useState("");
+  const [detailAnalysisKey, setDetailAnalysisKey] = useState("");
   const [detailAnalysis, setDetailAnalysis] = useState<JobDetailAnalysis | null>(null);
   const [detailJob, setDetailJob] = useState<RealJob | null>(null);
   const [favoriteByUrl, setFavoriteByUrl] = useState<Record<string, string>>({});
@@ -169,6 +170,7 @@ export default function MatchingPage() {
       if (refresh) {
         setRealJobsRefreshing(true);
         setRefreshError("");
+        setDetailAnalysisKey("");
         setDetailAnalysis(null);
         setDetailJob(null);
       } else {
@@ -351,7 +353,10 @@ export default function MatchingPage() {
 
   const loadJobDetailAnalysis = async (job: RealJob, idx: number) => {
     if (!profile) return;
-    setDetailLoadingKey(`${job.url}-${idx}`);
+    const jobKey = `${job.url}-${idx}`;
+    setDetailLoadingKey(jobKey);
+    setDetailAnalysisKey(jobKey);
+    setDetailAnalysis(null);
     setDetailJob(job);
     const profileSummary = [
       `${t("학력", "Education")}:${profile.school_name ?? ""}`,
@@ -380,6 +385,7 @@ export default function MatchingPage() {
     setDetailLoadingKey("");
 
     if (!res.ok) {
+      setDetailAnalysisKey("");
       setRealJobsMessage(json.error ?? t("공고 상세 분석에 실패했습니다.", "Failed to analyze job details."));
       return;
     }
@@ -645,66 +651,65 @@ export default function MatchingPage() {
                       >
                         {detailLoadingKey === jobKey ? t("분석 중...", "Analyzing...") : t("AI 상세 분석", "AI Detail Analysis")}
                       </button>
+                      {detailAnalysisKey === jobKey && detailAnalysis && (
+                        <div className="content-card mt-3 p-4">
+                          <p className="text-sm font-medium text-[var(--foreground)]">{t("공고 상세 분석", "Detailed Analysis")}</p>
+                          <p className="ko-friendly mt-1 text-sm leading-6 text-[var(--muted-strong)]">{detailAnalysis.fitSummary}</p>
+                          <div className="responsive-card-grid mt-2">
+                            <div className="content-card p-3">
+                              <p className="text-xs font-medium text-[var(--foreground)]">{t("강점", "Strengths")}</p>
+                              <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
+                                {detailAnalysis.strengths.map((s) => (
+                                  <li key={s}>{s}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="content-card p-3">
+                              <p className="text-xs font-medium text-[var(--foreground)]">{t("갭", "Gaps")}</p>
+                              <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
+                                {detailAnalysis.gaps.map((g) => (
+                                  <li key={g}>{g}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div className="content-card p-3">
+                              <p className="text-xs font-medium text-[var(--foreground)]">{t("실행 과제", "Action Items")}</p>
+                              <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
+                                {detailAnalysis.actionItems.map((a) => (
+                                  <li key={a}>{a}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                          {cultureFit ? (
+                            <div className="content-card mt-3 p-4">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <p className="ko-friendly text-sm font-semibold text-[var(--foreground)]">{t("컬처 핏 인사이트", "Culture Fit Insight")}</p>
+                                  <p className="ko-friendly mt-1 text-xs leading-5 text-[var(--muted)]">{cultureFit.summary}</p>
+                                </div>
+                                <span className="accent-pill w-fit px-3 py-1 text-[11px] font-semibold">{t("추정", "Estimated")}</span>
+                              </div>
+                              <div className="responsive-card-grid mt-3 text-xs">
+                                {[
+                                  [t("속도", "Pace"), cultureFit.pace],
+                                  [t("구조화", "Structure"), cultureFit.structure],
+                                  [t("자율성", "Autonomy"), cultureFit.autonomy],
+                                  [t("워라밸", "Work-life"), cultureFit.workLife],
+                                ].map(([label, value]) => (
+                                  <div key={label} className="content-card p-3">
+                                    <p className="font-semibold text-[var(--foreground)]">{label}</p>
+                                    <p className="ko-friendly mt-1 text-[var(--muted)]">{value}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                     );
                   })}
-                </div>
-              )}
-
-              {detailAnalysis && (
-                <div className="content-card mt-4 p-4">
-                  <p className="text-sm font-medium text-[var(--foreground)]">{t("공고 상세 분석", "Detailed Analysis")}</p>
-                  <p className="ko-friendly mt-1 text-sm leading-6 text-[var(--muted-strong)]">{detailAnalysis.fitSummary}</p>
-                  <div className="responsive-card-grid mt-2">
-                    <div className="content-card p-3">
-                      <p className="text-xs font-medium text-[var(--foreground)]">{t("강점", "Strengths")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
-                        {detailAnalysis.strengths.map((s) => (
-                          <li key={s}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="content-card p-3">
-                      <p className="text-xs font-medium text-[var(--foreground)]">{t("갭", "Gaps")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
-                        {detailAnalysis.gaps.map((g) => (
-                          <li key={g}>{g}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="content-card p-3">
-                      <p className="text-xs font-medium text-[var(--foreground)]">{t("실행 과제", "Action Items")}</p>
-                      <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
-                        {detailAnalysis.actionItems.map((a) => (
-                          <li key={a}>{a}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                  {cultureFit ? (
-                    <div className="content-card mt-3 p-4">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="ko-friendly text-sm font-semibold text-[var(--foreground)]">{t("컬처 핏 인사이트", "Culture Fit Insight")}</p>
-                          <p className="ko-friendly mt-1 text-xs leading-5 text-[var(--muted)]">{cultureFit.summary}</p>
-                        </div>
-                        <span className="accent-pill w-fit px-3 py-1 text-[11px] font-semibold">{t("추정", "Estimated")}</span>
-                      </div>
-                      <div className="responsive-card-grid mt-3 text-xs">
-                        {[
-                          [t("속도", "Pace"), cultureFit.pace],
-                          [t("구조화", "Structure"), cultureFit.structure],
-                          [t("자율성", "Autonomy"), cultureFit.autonomy],
-                          [t("워라밸", "Work-life"), cultureFit.workLife],
-                        ].map(([label, value]) => (
-                          <div key={label} className="content-card p-3">
-                            <p className="font-semibold text-[var(--foreground)]">{label}</p>
-                            <p className="ko-friendly mt-1 text-[var(--muted)]">{value}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               )}
             </>

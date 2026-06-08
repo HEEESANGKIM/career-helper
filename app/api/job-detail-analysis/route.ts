@@ -96,8 +96,16 @@ export async function POST(request: NextRequest) {
           `지원자 프로필 요약: ${profileSummary}`,
         ].join("\n");
 
-    const response = await openai.responses.create({ model: "gpt-4o-mini", input: prompt });
-    const parsed = parseJson(response.output_text?.trim() ?? "");
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+    const parsed = parseJson(response.choices[0]?.message?.content?.trim() ?? "");
     if (!parsed || typeof parsed !== "object") {
       return NextResponse.json(
         {
